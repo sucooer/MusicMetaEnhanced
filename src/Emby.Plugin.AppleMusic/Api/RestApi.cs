@@ -72,6 +72,16 @@ public class StatusRequest : IReturnVoid
 }
 
 /// <summary>
+/// The dashboard configuration form, rendered dynamically so the saved values are
+/// visible. The embedded static page embeds this in an iframe.
+/// </summary>
+[Route("/AppleMusic/FormPage", "GET")]
+[Unauthenticated]
+public class FormPageRequest : IReturnVoid
+{
+}
+
+/// <summary>
 /// The dashboard endpoints of the plugin. Emby discovers <c>IService</c> implementations
 /// on its own; the page itself cannot run JavaScript (Emby 4.9 does not execute inline
 /// scripts in plugin pages), so every action is a plain link or a native form post.
@@ -123,7 +133,7 @@ public class RestApi : IService, IRequiresRequest
         config.UseJsonSource = request.UseJsonSource;
         Plugin.Instance.SaveConfiguration();
         _logger.Info("Apple Music: configuration saved from the dashboard (storefront {0}, album storefront '{1}')", config.Storefront, config.AlbumStorefront);
-        Request.Response.Redirect("/emby/web/index.html#!/configurationpage?name=applemusic");
+        Request.Response.Redirect("/emby/AppleMusic/FormPage");
     }
 
     /// <summary>
@@ -202,6 +212,112 @@ public class RestApi : IService, IRequiresRequest
                 await WriteHtmlAsync("未知操作", HtmlEncode(request.Op)).ConfigureAwait(false);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Renders the dashboard configuration form with the saved values filled in.
+    /// </summary>
+    /// <returns>Task.</returns>
+    public async Task Get(FormPageRequest request)
+    {
+        if (IsCrossSiteRequest())
+        {
+            await WriteHtmlAsync("拒绝访问", "检测到跨站请求，已拒绝。请从 Emby 控制台的配置页发起操作。").ConfigureAwait(false);
+            return;
+        }
+
+        var config = Plugin.Instance!.Configuration!;
+        var storefront = HtmlEncode(PluginUtils.Storefront);
+        var albumStorefront = HtmlEncode(PluginUtils.ConfiguredAlbumStorefront ?? string.Empty);
+        var neteaseUrl = HtmlEncode(config.NeteaseApiBaseUrl ?? string.Empty);
+
+        static string Option(string value, string label, string current)
+        {
+            var selected = string.Equals(value, current, StringComparison.OrdinalIgnoreCase) ? " selected" : string.Empty;
+            return $"<option value=\"{value}\"{selected}>{label}</option>";
+        }
+
+        var html = $"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/><title>音乐元数据</title></head>
+<body style="margin:0;background:#fff;color:#222;font-family:inherit;">
+<div style="padding:1.5em 2em;box-sizing:border-box;">
+<div style="font-size:1.2em;font-weight:600;margin-bottom:0.6em;">国家 / 地区</div>
+
+<form method="post" action="/emby/AppleMusic/SaveConfig">
+<label style="display:block;font-weight:600;margin:0.9em 0 0.25em;">Storefront（艺人 / 简介数据源）</label>
+<select name="Storefront" style="width:100%;max-width:34em;box-sizing:border-box;padding:0.5em 0.6em;border:1px solid #bbb;border-radius:4px;font-size:14px;background:#fff;color:#222;">
+{Option("cn", "cn — 中国大陆", storefront)}
+{Option("jp", "jp — 日本", storefront)}
+{Option("us", "us — 美国", storefront)}
+{Option("hk", "hk — 中国香港", storefront)}
+{Option("tw", "tw — 中国台湾", storefront)}
+</select>
+<p style="color:#666;font-size:13px;margin:0.3em 0 0;">Apple 会按服务器出口 IP 做地理跳转，网页数据源实际能用的区域有限，国内一般保持 cn。</p>
+
+<label style="display:block;font-weight:600;margin:0.9em 0 0.25em;">AlbumStorefront（专辑元数据专用区域）</label>
+<select name="AlbumStorefront" style="width:100%;max-width:34em;box-sizing:border-box;padding:0.5em 0.6em;border:1px solid #bbb;border-radius:4px;font-size:14px;background:#fff;color:#222;">
+{Option("", "（跟随上面的 Storefront）", albumStorefront)}
+{Option("jp", "jp — 日本（假名原文，推荐日语库）", albumStorefront)}
+{Option("cn", "cn — 中国大陆", albumStorefront)}
+{Option("us", "us — 美国", albumStorefront)}
+{Option("hk", "hk — 中国香港", albumStorefront)}
+{Option("tw", "tw — 中国台湾", albumStorefront)}
+</select>
+<p style="color:#666;font-size:13px;margin:0.3em 0 0;">专辑数据走 iTunes API，这个区域不受 IP 跳转影响，jp 区返回原始假名的艺人名与曲目名。</p>
+
+<label style="display:block;font-weight:600;margin:0.9em 0 0.25em;">网易云 API 地址（中文简介来源，留空关闭）</label>
+<input name="NeteaseApiBaseUrl" type="text" autocomplete="off" value="{neteaseUrl}" style="width:100%;max-width:34em;box-sizing:border-box;padding:0.5em 0.6em;border:1px solid #bbb;border-radius:4px;font-size:14px;background:#fff;color:#222;" />
+<p style="color:#666;font-size:13px;margin:0.3em 0 0;">Apple 只给少数艺人配简介，网易云补中文简介；也用于艺人头像回退与别名匹配。</p>
+
+<label style="display:block;font-weight:600;margin:0.9em 0 0.25em;">简介优先级</label>
+<select name="PreferNeteaseBio" style="width:100%;max-width:34em;box-sizing:border-box;padding:0.5em 0.6em;border:1px solid #bbb;border-radius:4px;font-size:14px;background:#fff;color:#222;">
+{Option("true", "优先中文（网易云）", config.PreferNeteaseBio ? "true" : "false")}
+{Option("false", "优先 Apple Music", config.PreferNeteaseBio ? "true" : "false")}
+</select>
+
+<label style="display:block;font-weight:600;margin:0.9em 0 0.25em;">数据源</label>
+<select name="UseJsonSource" style="width:100%;max-width:34em;box-sizing:border-box;padding:0.5em 0.6em;border:1px solid #bbb;border-radius:4px;font-size:14px;background:#fff;color:#222;">
+{Option("false", "网页抓取（默认，稳定）", config.UseJsonSource ? "true" : "false")}
+{Option("true", "JSON API（实验性）", config.UseJsonSource ? "true" : "false")}
+</select>
+
+<div style="margin-top:1.2em;">
+<button type="submit" style="display:inline-block;vertical-align:top;padding:0.6em 1.2em;border:0;border-radius:4px;background:#00a4dc;color:#fff;font-size:14px;line-height:1.5;font-family:inherit;cursor:pointer;">保存配置</button>
+<a href="/emby/AppleMusic/Status" target="_blank" rel="noopener" style="display:inline-block;vertical-align:top;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">查看当前配置与状态</a>
+</div>
+</form>
+
+<div style="font-size:1.2em;font-weight:600;margin:1.6em 0 0.6em;">手动操作</div>
+<p style="color:#666;font-size:13px;margin:0 0 0.6em;">刷新在服务器后台执行，点击后可离开此页；大量条目时请耐心等待完成后查看结果。</p>
+
+<div>
+<a href="/emby/AppleMusic/Action?op=refresh-artists" class="am-btn-green" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#4caf50;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部艺人元数据</a>
+<a href="/emby/AppleMusic/Action?op=refresh-artists&amp;replace=true" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#00a4dc;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部艺人（替换已有值）</a>
+</div>
+<p style="color:#666;font-size:13px;margin:0 0 0.6em;">按名字匹配补全缺失的简介 / Apple Music ID；「替换已有值」会同时覆盖已有简介并把外部 ID 清空重写。</p>
+
+<div>
+<a href="/emby/AppleMusic/Action?op=refresh-albums" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#4caf50;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部专辑元数据</a>
+<a href="/emby/AppleMusic/Action?op=refresh-albums&amp;replace=true" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#00a4dc;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部专辑（替换已有值）</a>
+</div>
+<p style="color:#666;font-size:13px;margin:0 0 0.6em;">用当前 AlbumStorefront 区域补全专辑名 / 年份 / 流派 / Apple Music ID。</p>
+
+<div>
+<a href="/emby/AppleMusic/Action?op=test-netease" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">测试网易云 API 连通性</a>
+<a href="/emby/AppleMusic/Action?op=test-apple" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">测试 Apple Music 连通性</a>
+</div>
+
+</div>
+</body>
+</html>
+""";
+
+        var response = Request.Response;
+        response.ContentType = "text/html; charset=utf-8";
+        await response.OutputWriter.WriteAsync(Encoding.UTF8.GetBytes(html)).ConfigureAwait(false);
+        await response.CompleteAsync().ConfigureAwait(false);
     }
 
     /// <summary>

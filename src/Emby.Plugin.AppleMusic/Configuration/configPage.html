@@ -1,142 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Apple Music 配置</title>
+    <title>音乐元数据</title>
 </head>
 <body>
-    <div id="AppleMusicConfigurationPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
+    <div id="AppleMusicConfigurationPage" data-role="page" class="page type-interior pluginConfigurationPage">
 
         <style>
-            /* Emby 4.9+ renders plugin configuration pages as an overlay; the old
-               data-role="page" classes no longer provide a background. The style tag
+            /* Emby 4.9+ renders plugin configuration pages as an overlay; the style tag
                lives inside the page div because Emby strips <head> when injecting pages.
 
-               NOTE: Emby 4.9 does NOT execute inline <script> inside plugin pages, so
-               this page intentionally uses only plain HTML: a native form POST and
-               native links, no JavaScript at all. */
+               NOTE: Emby 4.9 does NOT execute inline <script> inside plugin pages. The
+               actual form is served dynamically by the plugin (RestApi /FormPage) so it
+               can show the saved values; the iframe keeps the outer dashboard page from
+               reloading on submit. */
             #AppleMusicConfigurationPage {
-                background: #ffffff;
+                background: transparent;
                 min-height: 100%;
-                padding: 1.5em 2em;
-                box-sizing: border-box;
-                color: #222;
+                padding: 0;
+                margin: 0;
             }
-            #AppleMusicConfigurationPage .sectionTitle {
-                font-size: 1.2em;
-                font-weight: 600;
-                margin: 1.4em 0 0.6em;
-            }
-            #AppleMusicConfigurationPage .sectionTitle:first-child {
-                margin-top: 0;
-            }
-            #AppleMusicConfigurationPage label {
-                display: block;
-                font-weight: 600;
-                margin: 0.9em 0 0.25em;
-            }
-            #AppleMusicConfigurationPage input[type=text],
-            #AppleMusicConfigurationPage select {
+            #AppleMusicConfigurationPage iframe {
                 width: 100%;
-                max-width: 34em;
-                box-sizing: border-box;
-                padding: 0.5em 0.6em;
-                border: 1px solid #bbb;
-                border-radius: 4px;
-                font-size: 14px;
-                background: #fff;
-                color: #222;
-            }
-            #AppleMusicConfigurationPage .am-btn {
-                display: inline-block;
-                margin: 1em 0.5em 0 0;
-                padding: 0.6em 1.2em;
+                height: 2650px;
                 border: 0;
-                border-radius: 4px;
-                background: #00a4dc;
-                color: #fff !important;
-                font-size: 14px;
-                text-decoration: none !important;
-                cursor: pointer;
-            }
-            #AppleMusicConfigurationPage .am-btn-green { background: #4caf50; }
-            #AppleMusicConfigurationPage .am-btn-grey { background: #777; }
-            #AppleMusicConfigurationPage .hint {
-                color: #666;
-                font-size: 13px;
-                margin: 0.3em 0 0;
+                display: block;
             }
         </style>
 
         <div data-role="content">
-            <div class="content-primary">
-
-                <div class="sectionTitle">国家 / 地区</div>
-
-                <form method="post" action="/emby/AppleMusic/SaveConfig">
-                    <label for="storefront">Storefront（艺人 / 简介数据源）</label>
-                    <select id="storefront" name="Storefront">
-                        <option value="cn">cn — 中国大陆</option>
-                        <option value="jp">jp — 日本</option>
-                        <option value="us">us — 美国</option>
-                        <option value="hk">hk — 中国香港</option>
-                        <option value="tw">tw — 中国台湾</option>
-                    </select>
-                    <p class="hint">Apple 会按服务器出口 IP 做地理跳转，网页数据源实际能用的区域有限，国内一般保持 cn。</p>
-
-                    <label for="albumStorefront">AlbumStorefront（专辑元数据专用区域）</label>
-                    <select id="albumStorefront" name="AlbumStorefront">
-                        <option value="">（跟随上面的 Storefront）</option>
-                        <option value="jp">jp — 日本（假名原文，推荐日语库）</option>
-                        <option value="cn">cn — 中国大陆</option>
-                        <option value="us">us — 美国</option>
-                        <option value="hk">hk — 中国香港</option>
-                        <option value="tw">tw — 中国台湾</option>
-                    </select>
-                    <p class="hint">专辑数据走 iTunes API，这个区域不受 IP 跳转影响，jp 区返回原始假名的艺人名与曲目名。</p>
-
-                    <label for="neteaseApiBaseUrl">网易云 API 地址（中文简介来源，留空关闭）</label>
-                    <input is="emby-input" id="neteaseApiBaseUrl" name="NeteaseApiBaseUrl" type="text" autocomplete="off" />
-                    <p class="hint">Apple 只给少数艺人配简介，网易云补中文简介；也用于艺人头像回退与别名匹配。</p>
-
-                    <label for="preferNeteaseBio">简介优先级</label>
-                    <select id="preferNeteaseBio" name="PreferNeteaseBio">
-                        <option value="true">优先中文（网易云）</option>
-                        <option value="false">优先 Apple Music</option>
-                    </select>
-
-                    <label for="useJsonSource">数据源</label>
-                    <select id="useJsonSource" name="UseJsonSource">
-                        <option value="false">网页抓取（默认，稳定）</option>
-                        <option value="true">JSON API（实验性）</option>
-                    </select>
-
-                    <div>
-                        <button is="emby-button" type="submit" class="am-btn"><span>保存配置</span></button>
-                        <a class="am-btn am-btn-grey" href="/emby/AppleMusic/Status" target="_blank" rel="noopener">查看当前配置与状态</a>
-                    </div>
-                </form>
-
-                <div class="sectionTitle">手动操作</div>
-                <p class="hint">刷新在服务器后台执行，点击后可离开此页；大量条目时请耐心等待完成后查看结果。</p>
-
-                <div>
-                    <a class="am-btn am-btn-green" href="/emby/AppleMusic/Action?op=refresh-artists">刷新全部艺人元数据</a>
-                    <a class="am-btn" href="/emby/AppleMusic/Action?op=refresh-artists&amp;replace=true">刷新全部艺人（替换已有值）</a>
-                </div>
-                <p class="hint">按名字匹配补全缺失的简介 / Apple Music ID；「替换已有值」会同时覆盖已有简介并把外部 ID 清空重写。</p>
-
-                <div>
-                    <a class="am-btn am-btn-green" href="/emby/AppleMusic/Action?op=refresh-albums">刷新全部专辑元数据</a>
-                    <a class="am-btn" href="/emby/AppleMusic/Action?op=refresh-albums&amp;replace=true">刷新全部专辑（替换已有值）</a>
-                </div>
-                <p class="hint">用当前 AlbumStorefront 区域补全专辑名 / 年份 / 流派 / Apple Music ID。</p>
-
-                <div>
-                    <a class="am-btn am-btn-grey" href="/emby/AppleMusic/Action?op=test-netease">测试网易云 API 连通性</a>
-                    <a class="am-btn am-btn-grey" href="/emby/AppleMusic/Action?op=test-apple">测试 Apple Music 连通性</a>
-                </div>
-
-            </div>
+            <iframe src="/emby/AppleMusic/FormPage"></iframe>
         </div>
     </div>
 </body>
