@@ -94,7 +94,7 @@ public class NeteaseMusicSource
         try
         {
             // A biography goes straight into the library, so it needs an exact name match.
-            var artist = await FindArtistAsync(baseUrl, artistName, allowSuffixMatch: false, cancellationToken).ConfigureAwait(false);
+            var artist = await FindArtistAsync(baseUrl, artistName, forImage: false, cancellationToken).ConfigureAwait(false);
             if (artist is null)
             {
                 return null;
@@ -139,7 +139,7 @@ public class NeteaseMusicSource
         {
             // An image is only shown to the person searching for it, so a suffixed name
             // ("瑞葵(mizuki)") is accepted here.
-            var match = await FindArtistAsync(baseUrl, artistName, allowSuffixMatch: true, cancellationToken).ConfigureAwait(false);
+            var match = await FindArtistAsync(baseUrl, artistName, forImage: true, cancellationToken).ConfigureAwait(false);
             if (match?.ImageUrl is null)
             {
                 _logger.Info("Netease: no artist image for '{0}'", artistName);
@@ -176,7 +176,7 @@ public class NeteaseMusicSource
     /// <param name="ImageUrl">Artist image URL without a size parameter.</param>
     private sealed record NeteaseArtistMatch(string Id, string? ImageUrl);
 
-    private async Task<NeteaseArtistMatch?> FindArtistAsync(string baseUrl, string artistName, bool allowSuffixMatch, CancellationToken cancellationToken)
+    private async Task<NeteaseArtistMatch?> FindArtistAsync(string baseUrl, string artistName, bool forImage, CancellationToken cancellationToken)
     {
         var url = $"{baseUrl}/search?keywords={Uri.EscapeDataString(artistName)}&type={SearchTypeArtist}&limit=10";
         var headers = new Dictionary<string, string>();
@@ -193,7 +193,7 @@ public class NeteaseMusicSource
 
         foreach (var artist in artists.EnumerateArray())
         {
-            if (!IsSameArtist(artist, artistName, allowSuffixMatch))
+            if (!IsSameArtist(artist, artistName, forImage))
             {
                 continue;
             }
@@ -223,9 +223,9 @@ public class NeteaseMusicSource
         return index < 0 ? url : url[..index];
     }
 
-    private static bool IsSameArtist(JsonElement artist, string artistName, bool allowSuffixMatch)
+    private static bool IsSameArtist(JsonElement artist, string artistName, bool forImage)
     {
-        if (Matches(ArtistField(artist, "name"), artistName, allowSuffixMatch))
+        if (Matches(ArtistField(artist, "name"), artistName, forImage))
         {
             return true;
         }
@@ -241,7 +241,7 @@ public class NeteaseMusicSource
 
             foreach (var value in values.EnumerateArray())
             {
-                if (value.ValueKind == JsonValueKind.String && Matches(value.GetString(), artistName, allowSuffixMatch))
+                if (value.ValueKind == JsonValueKind.String && Matches(value.GetString(), artistName, forImage))
                 {
                     return true;
                 }
@@ -258,14 +258,22 @@ public class NeteaseMusicSource
             : null;
     }
 
-    private static bool Matches(string? candidate, string artistName, bool allowSuffixMatch)
+    private static bool Matches(string? candidate, string artistName, bool forImage)
     {
-        // Biographies are written into the library, so they only accept an exact name.
-        // Images are only ever shown to a human who asked for them, so a name with a
-        // parenthesised suffix ("瑞葵(mizuki)") is good enough there.
-        return allowSuffixMatch
-            ? TitleMatcher.IsSameNameIgnoringSuffix(candidate, artistName)
-            : TitleMatcher.IsSameTitle(candidate, artistName);
+        if (forImage)
+        {
+            // An image is only shown to the person who searched for it, so a qualifier is fine
+            // in either direction ("瑞葵(mizuki)" for the library's "瑞葵").
+            return TitleMatcher.IsSameNameIgnoringSuffix(candidate, artistName);
+        }
+
+        // A biography is written into the library. An exact name passes, and so does a provider
+        // name that merely adds a qualifier ("瑞葵(mizuki)") - the qualifier only refines the
+        // same name. A *library* name carrying the qualifier means the item is something
+        // narrower (a character credit), and Netease data for the plain name may not describe
+        // it, so that is skipped.
+        return TitleMatcher.IsSameTitle(candidate, artistName)
+               || TitleMatcher.IsProviderNameQualified(candidate, artistName);
     }
 
     private async Task<string?> GetBioByIdAsync(string baseUrl, string artistId, string artistName, CancellationToken cancellationToken)

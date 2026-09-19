@@ -62,6 +62,35 @@ public static class TitleMatcher
     }
 
     /// <summary>
+    /// Gets a value indicating whether a provider's name is the library name plus a
+    /// parenthesised qualifier - the provider says "瑞葵(mizuki)" where the library has plain
+    /// "瑞葵". This is the *safe* half of the suffix rule: the provider only adds detail to the
+    /// same name, so its data does describe this item.
+    /// The opposite case is rejected on purpose: when the *library* name carries the qualifier
+    /// ("高木さん(CV:高橋李依)") the library item is a narrower entity, and data filed under the
+    /// plain name may not describe it.
+    /// </summary>
+    /// <param name="providerName">Name as returned by the provider.</param>
+    /// <param name="libraryName">Name stored in the library.</param>
+    /// <returns>True when the provider name matches and only adds a qualifier.</returns>
+    public static bool IsProviderNameQualified(string? providerName, string? libraryName)
+    {
+        if (string.IsNullOrWhiteSpace(providerName) || string.IsNullOrWhiteSpace(libraryName))
+        {
+            return false;
+        }
+
+        var stripped = StripParenthetical(providerName);
+        if (string.Equals(stripped, providerName, System.StringComparison.Ordinal))
+        {
+            // Nothing to strip, so the exact comparison already had its chance.
+            return false;
+        }
+
+        return IsSameTitle(stripped, libraryName);
+    }
+
+    /// <summary>
     /// Drops the first parenthesised part of a name, keeping the part before it.
     /// Handles both half width and full width brackets.
     /// </summary>
