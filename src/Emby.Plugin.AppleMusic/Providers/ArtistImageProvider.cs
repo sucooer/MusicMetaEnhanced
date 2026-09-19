@@ -72,23 +72,37 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         if (!string.IsNullOrEmpty(appleMusicId))
         {
             _logger.Info("Apple Music: using ID {0} for artist image lookup", appleMusicId);
-            return await GetImageById(appleMusicId!, cancellationToken).ConfigureAwait(false);
+            var byId = await GetImageById(appleMusicId!, cancellationToken).ConfigureAwait(false);
+            if (byId.Count > 0)
+            {
+                return byId;
+            }
+
+            // A stored ID can point at an artist Apple Music itself has no image for (the
+            // library artist 瑞葵 carries such an ID), so do not stop here - fall through to
+            // the name lookup, and from there to the Netease fallback.
+            _logger.Info("Apple Music: artist ID {0} has no image, falling back to a name lookup", appleMusicId);
         }
 
-        _logger.Info("Apple Music: artist ID is not available, using search with artist name {0}", artist.Name);
+        _logger.Info("Apple Music: looking up the image of '{0}' by name", artist.Name);
 
         var searchResults = await _metadataSource.SearchAsync(artist.Name, ItemType.Artist, cancellationToken).ConfigureAwait(false);
         _logger.Info("Apple Music: found {0} search results using term {1}", searchResults.Count, artist.Name);
 
         // Apple Music's artist search is fuzzy - searching とた also returns Pete Townshend and
-        // Pat Benatar - so only a result with the very same name may be used. Apple sorts by
-        // relevance, so the first match is the best one; later matches are just different
-        // artists that happen to share the name (there are two distinct artists called "Tota"),
-        // and offering them would only make the picker confusing.
+        // Pat Benatar - so only a result with the same name may be used. A parenthesised suffix
+        // is tolerated ("fripSide(vocal:Mao Uesugi)" for the library's fripSide), but only as a
+        // second attempt. Apple sorts by relevance, so the first match is the best one; later
+        // matches are just different artists sharing the name (there are two artists called
+        // "Tota"), and offering them would only make the picker confusing.
         var match = searchResults
             .OfType<AppleMusicArtist>()
             .FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.ImageUrl)
-                                         && TitleMatcher.IsSameTitle(candidate.Name, artist.Name));
+                                         && TitleMatcher.IsSameTitle(candidate.Name, artist.Name))
+            ?? searchResults
+                .OfType<AppleMusicArtist>()
+                .FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.ImageUrl)
+                                             && TitleMatcher.IsSameNameIgnoringSuffix(candidate.Name, artist.Name));
 
         if (match is null)
         {

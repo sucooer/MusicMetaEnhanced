@@ -93,7 +93,8 @@ public class NeteaseMusicSource
 
         try
         {
-            var artist = await FindArtistAsync(baseUrl, artistName, cancellationToken).ConfigureAwait(false);
+            // A biography goes straight into the library, so it needs an exact name match.
+            var artist = await FindArtistAsync(baseUrl, artistName, allowSuffixMatch: false, cancellationToken).ConfigureAwait(false);
             if (artist is null)
             {
                 return null;
@@ -136,7 +137,9 @@ public class NeteaseMusicSource
 
         try
         {
-            var match = await FindArtistAsync(baseUrl, artistName, cancellationToken).ConfigureAwait(false);
+            // An image is only shown to the person searching for it, so a suffixed name
+            // ("瑞葵(mizuki)") is accepted here.
+            var match = await FindArtistAsync(baseUrl, artistName, allowSuffixMatch: true, cancellationToken).ConfigureAwait(false);
             if (match?.ImageUrl is null)
             {
                 _logger.Info("Netease: no artist image for '{0}'", artistName);
@@ -173,7 +176,7 @@ public class NeteaseMusicSource
     /// <param name="ImageUrl">Artist image URL without a size parameter.</param>
     private sealed record NeteaseArtistMatch(string Id, string? ImageUrl);
 
-    private async Task<NeteaseArtistMatch?> FindArtistAsync(string baseUrl, string artistName, CancellationToken cancellationToken)
+    private async Task<NeteaseArtistMatch?> FindArtistAsync(string baseUrl, string artistName, bool allowSuffixMatch, CancellationToken cancellationToken)
     {
         var url = $"{baseUrl}/search?keywords={Uri.EscapeDataString(artistName)}&type={SearchTypeArtist}&limit=10";
         var headers = new Dictionary<string, string>();
@@ -190,7 +193,7 @@ public class NeteaseMusicSource
 
         foreach (var artist in artists.EnumerateArray())
         {
-            if (!IsSameArtist(artist, artistName))
+            if (!IsSameArtist(artist, artistName, allowSuffixMatch))
             {
                 continue;
             }
@@ -220,9 +223,9 @@ public class NeteaseMusicSource
         return index < 0 ? url : url[..index];
     }
 
-    private static bool IsSameArtist(JsonElement artist, string artistName)
+    private static bool IsSameArtist(JsonElement artist, string artistName, bool allowSuffixMatch)
     {
-        if (Matches(ArtistField(artist, "name"), artistName))
+        if (Matches(ArtistField(artist, "name"), artistName, allowSuffixMatch))
         {
             return true;
         }
@@ -238,7 +241,7 @@ public class NeteaseMusicSource
 
             foreach (var value in values.EnumerateArray())
             {
-                if (value.ValueKind == JsonValueKind.String && Matches(value.GetString(), artistName))
+                if (value.ValueKind == JsonValueKind.String && Matches(value.GetString(), artistName, allowSuffixMatch))
                 {
                     return true;
                 }
@@ -255,9 +258,14 @@ public class NeteaseMusicSource
             : null;
     }
 
-    private static bool Matches(string? candidate, string artistName)
+    private static bool Matches(string? candidate, string artistName, bool allowSuffixMatch)
     {
-        return TitleMatcher.IsSameTitle(candidate, artistName);
+        // Biographies are written into the library, so they only accept an exact name.
+        // Images are only ever shown to a human who asked for them, so a name with a
+        // parenthesised suffix ("瑞葵(mizuki)") is good enough there.
+        return allowSuffixMatch
+            ? TitleMatcher.IsSameNameIgnoringSuffix(candidate, artistName)
+            : TitleMatcher.IsSameTitle(candidate, artistName);
     }
 
     private async Task<string?> GetBioByIdAsync(string baseUrl, string artistId, string artistName, CancellationToken cancellationToken)

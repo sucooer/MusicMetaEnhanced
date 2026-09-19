@@ -40,6 +40,54 @@ public static class TitleMatcher
     }
 
     /// <summary>
+    /// Gets a value indicating whether two names refer to the same entity when a
+    /// parenthesised suffix is ignored. Providers bolt qualifiers onto names that the
+    /// library does not have - Netease stores "瑞葵(mizuki)" for the artist the library
+    /// knows as "瑞葵", and Apple Music has "fripSide(vocal:Mao Uesugi)" for "fripSide".
+    /// This is a *second* attempt only: callers use it after the exact comparison failed.
+    /// </summary>
+    /// <param name="first">First name.</param>
+    /// <param name="second">Second name.</param>
+    /// <returns>True when both names match once the parenthesised part is dropped.</returns>
+    public static bool IsSameNameIgnoringSuffix(string? first, string? second)
+    {
+        if (IsSameTitle(first, second))
+        {
+            return true;
+        }
+
+        var left = Normalize(StripParenthetical(first));
+        var right = Normalize(StripParenthetical(second));
+        return left.Length > 0 && string.Equals(left, right, System.StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Drops the first parenthesised part of a name, keeping the part before it.
+    /// Handles both half width and full width brackets.
+    /// </summary>
+    /// <param name="value">Name.</param>
+    /// <returns>Name without its parenthesised suffix.</returns>
+    private static string? StripParenthetical(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        var cut = value.Length;
+        foreach (var opening in new[] { '(', '（', '[', '【' })
+        {
+            var index = value.IndexOf(opening);
+            if (index > 0 && index < cut)
+            {
+                cut = index;
+            }
+        }
+
+        return cut < value.Length ? value[..cut] : value;
+    }
+
+    /// <summary>
     /// Normalizes a title for comparison. Kana are romanized first so that a library
     /// name in kana can match the romanized name a provider returns (とた vs Tota).
     /// </summary>
