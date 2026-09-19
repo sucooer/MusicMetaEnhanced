@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Emby.Plugin.AppleMusic</RootNamespace>
     <AssemblyName>Emby.Plugin.AppleMusic</AssemblyName>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>disable</ImplicitUsings>

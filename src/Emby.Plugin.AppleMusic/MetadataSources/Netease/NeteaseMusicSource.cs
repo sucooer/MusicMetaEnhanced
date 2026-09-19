@@ -11,10 +11,10 @@ using MediaBrowser.Model.Logging;
 namespace Emby.Plugin.AppleMusic.MetadataSources.Netease;
 
 /// <summary>
-/// Reads Chinese artist biographies from a local NeteaseCloudMusicApi instance
-/// (https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced).
-/// Apple Music only ships artist biographies for a small number of artists, so this is
-/// used to fill the gap with a Chinese source.
+/// Reads Chinese artist biographies from a NeteaseCloudMusicApi instance
+/// (https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced), either self hosted
+/// or a public one. Apple Music only ships artist biographies for a small number of
+/// artists, so this is used to fill the gap with a Chinese source.
 /// </summary>
 public class NeteaseMusicSource
 {

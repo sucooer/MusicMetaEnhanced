@@ -1,10 +1,11 @@
 import json
+import os
 import sys
 import time
 import urllib.parse
 import urllib.request
 
-API = "http://127.0.0.1:3055"
+API = os.environ.get("NCM_API", "http://127.0.0.1:3055").rstrip("/")
 
 
 def get(url):

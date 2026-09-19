@@ -20,12 +20,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool UseJsonSource { get; set; }
 
     /// <summary>
-    /// Gets or sets the base URL of a local NeteaseCloudMusicApi instance
-    /// (for example "http://127.0.0.1:3000"). Apple Music only ships biographies for
-    /// major artists, so this is used to fill in Chinese artist biographies.
-    /// Leave empty to disable.
+    /// Gets or sets the base URL of a NeteaseCloudMusicApi instance
+    /// (https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced), for example
+    /// "http://127.0.0.1:3000" for a local instance or a self hosted public one.
+    /// Apple Music only ships biographies for major artists, so this is used to fill in
+    /// Chinese artist biographies. Clear the value to disable the feature.
     /// </summary>
-    public string NeteaseApiBaseUrl { get; set; } = string.Empty;
+    public string NeteaseApiBaseUrl { get; set; } = "https://api.520717.xyz";
 
     /// <summary>
     /// Gets or sets a value indicating whether a Netease Cloud Music biography should
