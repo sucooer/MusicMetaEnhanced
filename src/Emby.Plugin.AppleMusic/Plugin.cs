@@ -48,7 +48,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasThumbIm
             new PluginPageInfo
             {
                 Name = "applemusic",
-                DisplayName = "音乐元数据",
+                DisplayName = "Music Meta Enhanced",
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html",
                 EnableInMainMenu = true,
                 MenuSection = "server",
