@@ -24,11 +24,38 @@ public static class TitleMatcher
     }
 
     /// <summary>
-    /// Normalizes a title for comparison.
+    /// Gets a value indicating whether two titles are literally the same name, i.e. without
+    /// kana romanization. Romaji equivalence ("とた" vs "Tota") is good enough to *find* an
+    /// item, but it must never be a reason to rename one, otherwise a library artist named
+    /// とた would silently be renamed to Tota.
+    /// </summary>
+    /// <param name="first">First title.</param>
+    /// <param name="second">Second title.</param>
+    /// <returns>True when both titles are the same without romanization.</returns>
+    public static bool IsSameLiteralTitle(string? first, string? second)
+    {
+        var left = NormalizeLiteral(first);
+        var right = NormalizeLiteral(second);
+        return left.Length > 0 && string.Equals(left, right, System.StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Normalizes a title for comparison. Kana are romanized first so that a library
+    /// name in kana can match the romanized name a provider returns (とた vs Tota).
     /// </summary>
     /// <param name="value">Title.</param>
     /// <returns>Lower case title without whitespace and punctuation.</returns>
     public static string Normalize(string? value)
+    {
+        return NormalizeLiteral(JapaneseKana.ToRomaji(value));
+    }
+
+    /// <summary>
+    /// Normalizes a title without romanizing kana.
+    /// </summary>
+    /// <param name="value">Title.</param>
+    /// <returns>Lower case title without whitespace and punctuation.</returns>
+    public static string NormalizeLiteral(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

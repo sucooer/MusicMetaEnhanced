@@ -75,16 +75,22 @@ public class AlbumImageProvider : IRemoteImageProvider, IHasOrder
         var searchResults = await _metadataSource.SearchAsync(term, ItemType.Album, cancellationToken).ConfigureAwait(false);
         _logger.Info("Apple Music: found {0} search results using term {1}", searchResults.Count, term);
 
-        var images = new List<RemoteImageInfo>();
-        foreach (var result in searchResults)
+        // The search term is "<artist> <album>", so Apple Music returns loosely related
+        // releases too. Only a release with the same title may be used, and since Apple
+        // sorts by relevance, the first match is the best one.
+        var match = searchResults
+            .OfType<AppleMusicAlbum>()
+            .FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.ImageUrl)
+                                         && TitleMatcher.IsSameTitle(candidate.Name, album.Name));
+
+        if (match is null)
         {
-            if (result is AppleMusicAlbum amAlbum && !string.IsNullOrEmpty(amAlbum.ImageUrl))
-            {
-                images.Add(CreateImageInfo(amAlbum.ImageUrl!));
-            }
+            _logger.Info("Apple Music: no album named '{0}' was found, no images to offer", album.Name);
+            return new List<RemoteImageInfo>();
         }
 
-        return images;
+        _logger.Info("Apple Music: matched album '{0}' (ID {1})", match.Name, match.Id);
+        return new List<RemoteImageInfo> { CreateImageInfo(match.ImageUrl!) };
     }
 
     /// <inheritdoc />

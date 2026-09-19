@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Emby.Plugin.AppleMusic.Dtos;
@@ -75,16 +76,24 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         var searchResults = await _metadataSource.SearchAsync(artist.Name, ItemType.Artist, cancellationToken).ConfigureAwait(false);
         _logger.Info("Apple Music: found {0} search results using term {1}", searchResults.Count, artist.Name);
 
-        var images = new List<RemoteImageInfo>();
-        foreach (var result in searchResults)
+        // Apple Music's artist search is fuzzy - searching とた also returns Pete Townshend and
+        // Pat Benatar - so only a result with the very same name may be used. Apple sorts by
+        // relevance, so the first match is the best one; later matches are just different
+        // artists that happen to share the name (there are two distinct artists called "Tota"),
+        // and offering them would only make the picker confusing.
+        var match = searchResults
+            .OfType<AppleMusicArtist>()
+            .FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.ImageUrl)
+                                         && TitleMatcher.IsSameTitle(candidate.Name, artist.Name));
+
+        if (match is null)
         {
-            if (result is AppleMusicArtist amArtist && !string.IsNullOrEmpty(amArtist.ImageUrl))
-            {
-                images.Add(CreateImageInfo(amArtist.ImageUrl!));
-            }
+            _logger.Info("Apple Music: no artist named '{0}' was found, no images to offer", artist.Name);
+            return new List<RemoteImageInfo>();
         }
 
-        return images;
+        _logger.Info("Apple Music: matched artist '{0}' (ID {1})", match.Name, match.Id);
+        return new List<RemoteImageInfo> { CreateImageInfo(match.ImageUrl!) };
     }
 
     /// <inheritdoc />

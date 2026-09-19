@@ -120,10 +120,11 @@ public class ArtistMetadataProvider : IRemoteMetadataProvider<MusicArtist, Artis
             Overview = overview,
         };
 
-        // Never rename the item from a fuzzy source: only use the Apple Music name when the
-        // identity came from a stored Apple Music ID or an exact name match.
+        // Never rename the item from a fuzzy source: a stored Apple Music ID is authoritative,
+        // and otherwise the name must be literally identical. Romaji equivalence (とた vs Tota)
+        // is enough to find an artist, but never a reason to rename one.
         if (artistData is not null
-            && (resolvedById || TitleMatcher.IsSameTitle(artistData.Name, info.Name)))
+            && (resolvedById || TitleMatcher.IsSameLiteralTitle(artistData.Name, info.Name)))
         {
             item.Name = artistData.Name;
         }

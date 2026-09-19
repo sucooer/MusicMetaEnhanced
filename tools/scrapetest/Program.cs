@@ -2,8 +2,72 @@ using System.Text;
 using Emby.Plugin.AppleMusic.Dtos;
 using Emby.Plugin.AppleMusic.MetadataSources;
 using Emby.Plugin.AppleMusic.MetadataSources.Web;
+using Emby.Plugin.AppleMusic.Utils;
 using MediaBrowser.Model.Logging;
 using ScrapeTest;
+
+Console.OutputEncoding = Encoding.UTF8;
+
+if (args.Length > 0 && args[0] == "--match" && args.Length > 1)
+{
+    // args[1] is a UTF-8 file with one artist name per line.
+    var names = File.ReadAllLines(args[1]).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+    var matchLogger = new ConsoleLogger();
+    var matchSource = new WebMetadataSource(matchLogger, new HttpClientStub());
+
+    Console.WriteLine($"{"库里名字",-24} {"结果",-6} {"苹果返回的名字",-26} {"id",-12} 匹配方式");
+    var hit = 0;
+    foreach (var name in names)
+    {
+        var results = await matchSource.SearchAsync(name, ItemType.Artist, CancellationToken.None);
+        var candidates = results.OfType<AppleMusicArtist>().ToList();
+        var match = candidates.FirstOrDefault(a => TitleMatcher.IsSameTitle(a.Name, name));
+        if (match is not null)
+        {
+            hit++;
+        }
+
+        var how = match is null
+            ? "-"
+            : TitleMatcher.IsSameLiteralTitle(match.Name, name) ? "字面相同" : "假名转罗马字";
+        Console.WriteLine(
+            $"{name,-24} {(match is null ? "未命中" : "命中"),-6} {match?.Name ?? candidates.FirstOrDefault()?.Name ?? "(无结果)",-26} {match?.Id,-12} {how}");
+    }
+
+    Console.WriteLine($"命中 {hit}/{names.Count}");
+    return 0;
+}
+
+if (args.Length > 0 && args[0] == "--normalize")
+{
+    Console.WriteLine("TitleMatcher normalization check");
+    Console.WriteLine();
+
+    var pairs = args.Length > 1
+        ? new[] { (args[1], args.Length > 2 ? args[2] : string.Empty) }
+        : new[]
+        {
+            ("とた", "Tota"),
+            ("とた", "totâ"),
+            ("とた", "Pete Townshend"),
+            ("緑黄色社会", "緑黄色社会"),
+            ("緑黄色社会", "Ryokuoushoku Shakai"),
+            ("家入レオ", "家入レオ"),
+            ("奥華子", "Hanako Oku"),
+            ("テイラー・スウィフト", "Taylor Swift"),
+            ("コーヒー", "Kohi"),
+        };
+
+    foreach (var (left, right) in pairs)
+    {
+        var verdict = TitleMatcher.IsSameTitle(left, right) ? "MATCH   " : "no match";
+        var literal = TitleMatcher.IsSameLiteralTitle(left, right) ? "literal" : "-";
+        Console.WriteLine(
+            $"  {verdict}  {left,-16} vs {right,-22} literal={literal,-7} ({TitleMatcher.Normalize(left)} | {TitleMatcher.Normalize(right)})");
+    }
+
+    return 0;
+}
 
 var term = args.Length > 0 ? args[0] : "Taylor Swift 1989";
 

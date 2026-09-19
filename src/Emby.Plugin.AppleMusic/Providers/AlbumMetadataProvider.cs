@@ -92,6 +92,7 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
     public async Task<MetadataResult<MusicAlbum>> GetMetadata(AlbumInfo info, CancellationToken cancellationToken)
     {
         var appleMusicId = info.GetProviderId(ProviderKey.AppleMusicAlbum);
+        var resolvedById = !string.IsNullOrEmpty(appleMusicId);
         AppleMusicAlbum? albumData;
 
         if (!string.IsNullOrEmpty(appleMusicId))
@@ -118,7 +119,6 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
         {
             Item = new MusicAlbum
             {
-                Name = albumData.Name,
                 Overview = albumData.About,
                 ProductionYear = albumData.ReleaseDate?.Year,
                 Artists = artistNames.ToArray(),
@@ -126,6 +126,14 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
             },
             HasMetadata = albumData.HasMetadata(),
         };
+
+        // Never rename the item from a fuzzy source: a stored Apple Music ID is authoritative,
+        // and otherwise the title must be literally identical. Romaji equivalence is enough to
+        // find an album, but never a reason to rename one.
+        if (resolvedById || TitleMatcher.IsSameLiteralTitle(albumData.Name, info.Name))
+        {
+            metadataResult.Item.Name = albumData.Name;
+        }
 
         var albumArtist = albumData.Artists.FirstOrDefault();
         if (albumArtist is not null && !string.IsNullOrEmpty(albumArtist.Id))
