@@ -310,9 +310,8 @@ public class RestApi : IService, IRequiresRequest
 </div>
 
 </div>
-</body>
-</html>
 """;
+        html += "<script>window.addEventListener('load',function(){try{window.frameElement.style.height=document.documentElement.scrollHeight+'px';}catch(e){}});</" + "script></body></html>";
 
         var response = Request.Response;
         response.ContentType = "text/html; charset=utf-8";
@@ -429,10 +428,19 @@ public class RestApi : IService, IRequiresRequest
 
     private async Task WriteHtmlAsync(string title, string bodyHtml)
     {
+        // This page is shown inside the dashboard iframe, so it must paint its own
+        // opaque background (otherwise the dashboard bleeds through) and shrink the
+        // iframe to the content height (otherwise the fixed iframe height leaves a
+        // huge scrollable void). The resize script runs fine here: the "no inline
+        // scripts" limitation only applies to the static plugin configuration page,
+        // not to pages the plugin serves itself.
         var page = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>" + HtmlEncode(title) +
-                   "</title></head><body style=\"font-family:sans-serif;max-width:36em;margin:4em auto;padding:0 1em;\"><h2>" +
+                   "</title><style>html,body{margin:0;padding:0;background:#fff;color:#222;font-family:sans-serif;}" +
+                   ".wrap{max-width:36em;margin:0 auto;padding:2.5em 1.5em;}h2{font-size:1.3em;margin-top:0;}" +
+                   "a{color:#00a4dc;}</style></head><body><div class=\"wrap\"><h2>" +
                    HtmlEncode(title) + "</h2><p>" + bodyHtml +
-                   "</p><p><a href=\"/emby/web/index.html#!/configurationpage?name=applemusic\">返回音乐元数据配置页</a></p></body></html>";
+                   "</p><p><a href=\"/emby/AppleMusic/FormPage\">返回音乐元数据配置页</a></p></div>" +
+                   "<script>window.addEventListener('load',function(){try{window.frameElement.style.height=document.documentElement.scrollHeight+'px';}catch(e){}});</" + "script></body></html>";
 
         var response = Request.Response;
         response.ContentType = "text/html; charset=utf-8";
