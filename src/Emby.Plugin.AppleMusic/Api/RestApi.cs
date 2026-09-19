@@ -316,7 +316,7 @@ public class RestApi : IService, IRequiresRequest
         var page = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>" + HtmlEncode(title) +
                    "</title></head><body style=\"font-family:sans-serif;max-width:36em;margin:4em auto;padding:0 1em;\"><h2>" +
                    HtmlEncode(title) + "</h2><p>" + bodyHtml +
-                   "</p><p><a href=\"/emby/web/index.html#!/configurationpage?name=applemusic\">返回 Apple Music 配置页</a></p></body></html>";
+                   "</p><p><a href=\"/emby/web/index.html#!/configurationpage?name=applemusic\">返回音乐元数据配置页</a></p></body></html>";
 
         var response = Request.Response;
         response.ContentType = "text/html; charset=utf-8";
