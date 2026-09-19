@@ -133,7 +133,7 @@ public class RestApi : IService, IRequiresRequest
         config.UseJsonSource = request.UseJsonSource;
         Plugin.Instance.SaveConfiguration();
         _logger.Info("Apple Music: configuration saved from the dashboard (storefront {0}, album storefront '{1}')", config.Storefront, config.AlbumStorefront);
-        Request.Response.Redirect("/emby/AppleMusic/FormPage");
+        Request.Response.Redirect("/emby/AppleMusic/FormPage?v=18");
     }
 
     /// <summary>
@@ -285,7 +285,7 @@ public class RestApi : IService, IRequiresRequest
 
 <div style="margin-top:1.2em;">
 <button type="submit" style="display:inline-block;vertical-align:top;padding:0.6em 1.2em;border:0;border-radius:4px;background:#00a4dc;color:#fff;font-size:14px;line-height:1.5;font-family:inherit;cursor:pointer;">保存配置</button>
-<a href="/emby/AppleMusic/Status" target="_blank" rel="noopener" style="display:inline-block;vertical-align:top;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">查看当前配置与状态</a>
+<a href="/emby/AppleMusic/Status?v=18" target="_blank" rel="noopener" style="display:inline-block;vertical-align:top;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">查看当前配置与状态</a>
 </div>
 </form>
 
@@ -293,20 +293,20 @@ public class RestApi : IService, IRequiresRequest
 <p style="color:#666;font-size:13px;margin:0 0 0.6em;">刷新在服务器后台执行，点击后可离开此页；大量条目时请耐心等待完成后查看结果。</p>
 
 <div>
-<a href="/emby/AppleMusic/Action?op=refresh-artists" class="am-btn-green" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#4caf50;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部艺人元数据</a>
-<a href="/emby/AppleMusic/Action?op=refresh-artists&amp;replace=true" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#00a4dc;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部艺人（替换已有值）</a>
+<a href="/emby/AppleMusic/Action?op=refresh-artists&amp;v=18" class="am-btn-green" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#4caf50;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部艺人元数据</a>
+<a href="/emby/AppleMusic/Action?op=refresh-artists&amp;replace=true&amp;v=18" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#00a4dc;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部艺人（替换已有值）</a>
 </div>
 <p style="color:#666;font-size:13px;margin:0 0 0.6em;">按名字匹配补全缺失的简介 / Apple Music ID；「替换已有值」会同时覆盖已有简介并把外部 ID 清空重写。</p>
 
 <div>
-<a href="/emby/AppleMusic/Action?op=refresh-albums" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#4caf50;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部专辑元数据</a>
-<a href="/emby/AppleMusic/Action?op=refresh-albums&amp;replace=true" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#00a4dc;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部专辑（替换已有值）</a>
+<a href="/emby/AppleMusic/Action?op=refresh-albums&amp;v=18" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#4caf50;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部专辑元数据</a>
+<a href="/emby/AppleMusic/Action?op=refresh-albums&amp;replace=true&amp;v=18" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#00a4dc;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">刷新全部专辑（替换已有值）</a>
 </div>
 <p style="color:#666;font-size:13px;margin:0 0 0.6em;">用当前 AlbumStorefront 区域补全专辑名 / 年份 / 流派 / Apple Music ID。</p>
 
 <div>
-<a href="/emby/AppleMusic/Action?op=test-netease" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">测试网易云 API 连通性</a>
-<a href="/emby/AppleMusic/Action?op=test-apple" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">测试 Apple Music 连通性</a>
+<a href="/emby/AppleMusic/Action?op=test-netease&amp;v=18" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">测试网易云 API 连通性</a>
+<a href="/emby/AppleMusic/Action?op=test-apple&amp;v=18" style="display:inline-block;vertical-align:top;margin:0 0.5em 0.5em 0;padding:0.6em 1.2em;border-radius:4px;background:#777;color:#fff !important;font-size:14px;line-height:1.5;text-decoration:none !important;">测试 Apple Music 连通性</a>
 </div>
 
 </div>
@@ -470,7 +470,7 @@ public class RestApi : IService, IRequiresRequest
                    ".wrap{max-width:36em;margin:0 auto;padding:2.5em 1.5em;}h2{font-size:1.3em;margin-top:0;}" +
                    "a{color:#00a4dc;}</style></head><body><div class=\"wrap\"><h2>" +
                    HtmlEncode(title) + "</h2><p>" + bodyHtml +
-                   "</p><p><a href=\"/emby/AppleMusic/FormPage\" onclick=\"location.replace('/emby/AppleMusic/FormPage');return false;\">返回音乐元数据配置页</a></p></div>" +
+                   "</p><p><a href=\"/emby/AppleMusic/FormPage?v=18\" onclick=\"location.replace('/emby/AppleMusic/FormPage?v=18');return false;\">返回音乐元数据配置页</a></p></div>" +
                    "<script>window.addEventListener('load',function(){try{window.frameElement.style.height=Math.max(document.body.scrollHeight,200)+'px';}catch(e){}});</" + "script></body></html>";
 
         var response = Request.Response;
