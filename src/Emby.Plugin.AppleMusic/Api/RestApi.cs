@@ -86,7 +86,7 @@ public class RestApi : IService, IRequiresRequest
         _libraryManager = libraryManager;
         _fileSystem = fileSystem;
         _httpClient = httpClient;
-        _logger = logManager.GetLogger("Apple Music");
+        _logger = logManager.GetLogger("Music Meta Enhanced");
     }
 
     /// <summary>

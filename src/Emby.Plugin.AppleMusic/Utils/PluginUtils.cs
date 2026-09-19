@@ -12,7 +12,7 @@ public static class PluginUtils
     /// <summary>
     /// Gets the plugin name.
     /// </summary>
-    public static string PluginName => "Apple Music";
+    public static string PluginName => "Music Meta Enhanced";
 
     /// <summary>
     /// Gets the configured Apple Music storefront.

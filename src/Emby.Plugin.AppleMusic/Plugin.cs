@@ -25,10 +25,10 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <inheritdoc />
-    public override string Name => "Apple Music";
+    public override string Name => "Music Meta Enhanced";
 
     /// <inheritdoc />
-    public override string Description => "Apple Music metadata and image provider for music albums and artists.";
+    public override string Description => "Enhanced music metadata for Emby: Apple Music providers (multi-storefront), Netease Cloud Music biographies and image fallback, alias bridging and dashboard tools.";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("2f9d4b6e-9c7a-4a1e-8f3b-6d5c2a7e1b40");
@@ -46,8 +46,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             new PluginPageInfo
             {
                 Name = "applemusic",
-                DisplayName = Name,
+                DisplayName = "音乐元数据",
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html",
+                EnableInMainMenu = true,
                 MenuSection = "server",
                 MenuIcon = "audiotrack",
             },
