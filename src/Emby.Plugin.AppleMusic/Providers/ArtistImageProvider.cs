@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Emby.Plugin.AppleMusic.Dtos;
 using Emby.Plugin.AppleMusic.ExternalIds;
 using Emby.Plugin.AppleMusic.MetadataSources;
+using Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient;
+using Emby.Plugin.AppleMusic.MetadataSources.Netease;
 using Emby.Plugin.AppleMusic.Utils;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities;
@@ -25,6 +27,7 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
     private readonly IHttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IMetadataSource _metadataSource;
+    private readonly NeteaseMusicSource _neteaseSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ArtistImageProvider"/> class.
@@ -36,6 +39,7 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         _httpClient = httpClient;
         _logger = logger;
         _metadataSource = MetadataSourceFactory.Create(logger, httpClient);
+        _neteaseSource = new NeteaseMusicSource(logger, new SimpleHttpClient());
     }
 
     /// <inheritdoc />
@@ -88,12 +92,35 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
 
         if (match is null)
         {
-            _logger.Info("Apple Music: no artist named '{0}' was found, no images to offer", artist.Name);
-            return new List<RemoteImageInfo>();
+            // Apple Music localizes some artist names (花澤香菜 becomes 花泽香菜), and those can
+            // never match the library name. Netease keeps the original name, so it is used as a
+            // fallback image source for exactly those artists.
+            var neteaseImage = await _neteaseSource.GetArtistImageUrlAsync(artist.Name, cancellationToken).ConfigureAwait(false);
+
+            if (neteaseImage is null)
+            {
+                _logger.Info("Apple Music: no artist named '{0}' was found, no images to offer", artist.Name);
+                return new List<RemoteImageInfo>();
+            }
+
+            return new List<RemoteImageInfo> { CreateNeteaseImageInfo(neteaseImage) };
         }
 
         _logger.Info("Apple Music: matched artist '{0}' (ID {1})", match.Name, match.Id);
         return new List<RemoteImageInfo> { CreateImageInfo(match.ImageUrl!) };
+    }
+
+    private RemoteImageInfo CreateNeteaseImageInfo(string imageUrl)
+    {
+        return new RemoteImageInfo
+        {
+            Height = 1400,
+            Width = 1400,
+            ProviderName = Name,
+            ThumbnailUrl = NeteaseMusicSource.WithSize(imageUrl, 100),
+            Type = ImageType.Primary,
+            Url = imageUrl,
+        };
     }
 
     /// <inheritdoc />

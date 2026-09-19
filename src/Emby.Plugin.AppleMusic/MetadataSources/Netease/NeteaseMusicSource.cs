@@ -35,6 +35,11 @@ public class NeteaseMusicSource
     /// </summary>
     private const int SearchTypeArtist = 100;
 
+    /// <summary>
+    /// Size requested for artist images, matching what the Apple Music provider asks for.
+    /// </summary>
+    private const int ImageSize = 1400;
+
     private readonly ILogger _logger;
     private readonly ISimpleHttpClient _httpClient;
 
@@ -50,13 +55,19 @@ public class NeteaseMusicSource
     }
 
     /// <summary>
+    /// Default API base URL. Used as the configuration default, and also when the plugin has
+    /// not been loaded (tools, tests) so the same source can be exercised outside Emby.
+    /// </summary>
+    public const string DefaultApiBaseUrl = "https://api.520717.xyz";
+
+    /// <summary>
     /// Gets the configured API base URL, or null when the feature is disabled.
     /// </summary>
     public static string? ConfiguredBaseUrl
     {
         get
         {
-            var url = Plugin.Instance?.Configuration?.NeteaseApiBaseUrl;
+            var url = Plugin.Instance?.Configuration?.NeteaseApiBaseUrl ?? DefaultApiBaseUrl;
             if (string.IsNullOrWhiteSpace(url))
             {
                 return null;
@@ -82,13 +93,13 @@ public class NeteaseMusicSource
 
         try
         {
-            var artistId = await FindArtistIdAsync(baseUrl, artistName, cancellationToken).ConfigureAwait(false);
-            if (artistId is null)
+            var artist = await FindArtistAsync(baseUrl, artistName, cancellationToken).ConfigureAwait(false);
+            if (artist is null)
             {
                 return null;
             }
 
-            var bio = await GetBioByIdAsync(baseUrl, artistId, artistName, cancellationToken).ConfigureAwait(false);
+            var bio = await GetBioByIdAsync(baseUrl, artist.Id, artistName, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(bio) || bio!.Trim().Length < MinBioLength)
             {
                 _logger.Info("Netease: no usable biography for artist '{0}'", artistName);
@@ -107,7 +118,62 @@ public class NeteaseMusicSource
         }
     }
 
-    private async Task<string?> FindArtistIdAsync(string baseUrl, string artistName, CancellationToken cancellationToken)
+    /// <summary>
+    /// Gets the URL of an artist image, sized the same way the Apple Music provider sizes its
+    /// images. Netease stores the artist's original name, so this covers artists Apple Music
+    /// localizes away from the library name (花澤香菜 -> 花泽香菜).
+    /// </summary>
+    /// <param name="artistName">Artist name as stored in the library.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Image URL, or null when nothing suitable was found.</returns>
+    public async Task<string?> GetArtistImageUrlAsync(string artistName, CancellationToken cancellationToken)
+    {
+        var baseUrl = ConfiguredBaseUrl;
+        if (baseUrl is null || string.IsNullOrWhiteSpace(artistName))
+        {
+            return null;
+        }
+
+        try
+        {
+            var match = await FindArtistAsync(baseUrl, artistName, cancellationToken).ConfigureAwait(false);
+            if (match?.ImageUrl is null)
+            {
+                _logger.Info("Netease: no artist image for '{0}'", artistName);
+                return null;
+            }
+
+            _logger.Info("Netease: found an artist image for '{0}' (ID {1})", artistName, match.Id);
+            return WithSize(match.ImageUrl, ImageSize);
+        }
+        catch (Exception exception)
+        {
+            // A missing or broken Netease API must never break an image lookup.
+            _logger.ErrorException("Netease: failed to fetch an artist image for '{0}'", exception, artistName);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Appends the Netease size parameter, which is how their CDN picks the resolution.
+    /// An existing size parameter is replaced.
+    /// </summary>
+    /// <param name="imageUrl">Image URL, with or without a query string.</param>
+    /// <param name="size">Requested square size in pixels.</param>
+    /// <returns>URL of the sized image.</returns>
+    public static string WithSize(string imageUrl, int size)
+    {
+        return $"{StripSizeParameter(imageUrl)}?param={size}y{size}";
+    }
+
+    /// <summary>
+    /// An artist as found in Netease.
+    /// </summary>
+    /// <param name="Id">Netease artist id.</param>
+    /// <param name="ImageUrl">Artist image URL without a size parameter.</param>
+    private sealed record NeteaseArtistMatch(string Id, string? ImageUrl);
+
+    private async Task<NeteaseArtistMatch?> FindArtistAsync(string baseUrl, string artistName, CancellationToken cancellationToken)
     {
         var url = $"{baseUrl}/search?keywords={Uri.EscapeDataString(artistName)}&type={SearchTypeArtist}&limit=10";
         var headers = new Dictionary<string, string>();
@@ -130,13 +196,28 @@ public class NeteaseMusicSource
             }
 
             var id = artist.TryGetProperty("id", out var idElement) ? idElement.ToString() : null;
-            if (!string.IsNullOrEmpty(id))
+            if (string.IsNullOrEmpty(id))
             {
-                return id;
+                continue;
             }
+
+            // picUrl sometimes already carries its own ?param= size, which must be replaced
+            // rather than appended to.
+            var picture = ArtistField(artist, "picUrl");
+            var imageUrl = string.IsNullOrWhiteSpace(picture)
+                ? null
+                : StripSizeParameter(picture!);
+
+            return new NeteaseArtistMatch(id!, imageUrl);
         }
 
         return null;
+    }
+
+    private static string StripSizeParameter(string url)
+    {
+        var index = url.IndexOf('?', StringComparison.Ordinal);
+        return index < 0 ? url : url[..index];
     }
 
     private static bool IsSameArtist(JsonElement artist, string artistName)

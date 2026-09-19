@@ -8,6 +8,30 @@ using ScrapeTest;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+if (args.Length > 0 && args[0] == "--netease" && args.Length > 1)
+{
+    // How many library artists can get an image from the Netease source.
+    var names = File.ReadAllLines(args[1]).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+    var neteaseSource = new Emby.Plugin.AppleMusic.MetadataSources.Netease.NeteaseMusicSource(
+        new ConsoleLogger(),
+        new Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient.SimpleHttpClient());
+
+    var found = 0;
+    foreach (var name in names)
+    {
+        var url = await neteaseSource.GetArtistImageUrlAsync(name, CancellationToken.None);
+        if (url is not null)
+        {
+            found++;
+        }
+
+        Console.WriteLine($"{name,-26} {(url is null ? "无图" : "有图"),-5} {url ?? "-"}");
+    }
+
+    Console.WriteLine($"网易云有图 {found}/{names.Count}");
+    return 0;
+}
+
 if (args.Length > 0 && args[0] == "--match" && args.Length > 1)
 {
     // args[1] is a UTF-8 file with one artist name per line.

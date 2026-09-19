@@ -26,7 +26,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Apple Music only ships biographies for major artists, so this is used to fill in
     /// Chinese artist biographies. Clear the value to disable the feature.
     /// </summary>
-    public string NeteaseApiBaseUrl { get; set; } = "https://api.520717.xyz";
+    public string NeteaseApiBaseUrl { get; set; } = MetadataSources.Netease.NeteaseMusicSource.DefaultApiBaseUrl;
 
     /// <summary>
     /// Gets or sets a value indicating whether a Netease Cloud Music biography should
