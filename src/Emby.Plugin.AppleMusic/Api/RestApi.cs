@@ -311,10 +311,41 @@ public class RestApi : IService, IRequiresRequest
 
 </div>
 """;
-        html += "<script>window.addEventListener('load',function(){try{window.frameElement.style.height=document.documentElement.scrollHeight+'px';}catch(e){}});</" + "script></body></html>";
+        html += """
+<script>
+(function(){
+  function fit(){
+    try{ window.frameElement.style.height = Math.max(document.body.scrollHeight, 200) + 'px'; }catch(e){}
+  }
+  window.addEventListener('load', fit);
+  // Intercept result links and the save form: navigating the iframe would push entries
+  // into the browser history and leave the dashboard back button on a blank state.
+  document.addEventListener('click', function(e){
+    var a = e.target.closest ? e.target.closest('a[href*="/emby/AppleMusic/Action"]') : null;
+    if(!a){ return; }
+    e.preventDefault();
+    fetch(a.getAttribute('href'))
+      .then(function(r){ return r.text(); })
+      .then(function(html){ document.open(); document.write(html); document.close(); fit(); });
+  });
+  var form = document.querySelector('form[action*="/emby/AppleMusic/SaveConfig"]');
+  if(form){
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var body = new URLSearchParams(new FormData(form)).toString();
+      fetch(form.getAttribute('action'), {method:'POST', body: body, headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+        .then(function(){ return fetch('/emby/AppleMusic/FormPage'); })
+        .then(function(r){ return r.text(); })
+        .then(function(html){ document.open(); document.write(html); document.close(); fit(); });
+    });
+  }
+})();
+</script></body></html>
+""";
 
         var response = Request.Response;
         response.ContentType = "text/html; charset=utf-8";
+        response.AddHeader("Cache-Control", "no-store");
         await response.OutputWriter.WriteAsync(Encoding.UTF8.GetBytes(html)).ConfigureAwait(false);
         await response.CompleteAsync().ConfigureAwait(false);
     }
@@ -439,11 +470,12 @@ public class RestApi : IService, IRequiresRequest
                    ".wrap{max-width:36em;margin:0 auto;padding:2.5em 1.5em;}h2{font-size:1.3em;margin-top:0;}" +
                    "a{color:#00a4dc;}</style></head><body><div class=\"wrap\"><h2>" +
                    HtmlEncode(title) + "</h2><p>" + bodyHtml +
-                   "</p><p><a href=\"/emby/AppleMusic/FormPage\">返回音乐元数据配置页</a></p></div>" +
-                   "<script>window.addEventListener('load',function(){try{window.frameElement.style.height=document.documentElement.scrollHeight+'px';}catch(e){}});</" + "script></body></html>";
+                   "</p><p><a href=\"/emby/AppleMusic/FormPage\" onclick=\"location.replace('/emby/AppleMusic/FormPage');return false;\">返回音乐元数据配置页</a></p></div>" +
+                   "<script>window.addEventListener('load',function(){try{window.frameElement.style.height=Math.max(document.body.scrollHeight,200)+'px';}catch(e){}});</" + "script></body></html>";
 
         var response = Request.Response;
         response.ContentType = "text/html; charset=utf-8";
+        response.AddHeader("Cache-Control", "no-store");
         await response.OutputWriter.WriteAsync(Encoding.UTF8.GetBytes(page)).ConfigureAwait(false);
         await response.CompleteAsync().ConfigureAwait(false);
     }
