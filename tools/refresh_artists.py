@@ -1,8 +1,9 @@
 import json
 import time
 import urllib.request
+import os
 
-KEY = "(API key removed)"
+KEY = os.environ.get("EMBY_API_KEY", "")
 EMBY = "http://localhost:8096/emby"
 BODY = json.dumps({
     "MetadataRefreshMode": "FullRefresh",

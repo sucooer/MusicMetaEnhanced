@@ -3,7 +3,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const DEBUG_PORT = '9226';
-const KEY = '(API key removed)';
+const KEY = process.env.EMBY_API_KEY || '';
 const DASHBOARD = `http://localhost:8096/emby/web/index.html#!/home`;
 const PLUGIN_PAGE = `http://localhost:8096/emby/web/configurationpage?name=applemusic&api_key=${KEY}`;
 

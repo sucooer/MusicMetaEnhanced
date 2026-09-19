@@ -2,8 +2,9 @@ import json
 import re
 import time
 import urllib.request
+import os
 
-KEY = "(API key removed)"
+KEY = os.environ.get("EMBY_API_KEY", "")
 URL = (
     "http://localhost:8096/emby/Items?IncludeItemTypes=MusicArtist&Recursive=true&Limit=200"
     f"&Fields=Overview&api_key={KEY}"

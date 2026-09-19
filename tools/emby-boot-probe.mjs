@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs'
 
 const CDP = 'http://127.0.0.1:9224'
-const KEY = '(API key removed)'
+const KEY = process.env.EMBY_API_KEY || '';
 const SITE = `http://localhost:8096/web/index.html?api_key=${KEY}#!/item.html?id=31689`
 
 let list = await (await fetch(`${CDP}/json/list`)).json()

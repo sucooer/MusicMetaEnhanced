@@ -11,8 +11,9 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <!-- Emby 4.9.5.0 runs on .NET 8 -->
-    <EmbySystemDir Condition="'$(EmbySystemDir)' == ''">C:\Users\user\programs\embyserver\system</EmbySystemDir>
+    <!-- Emby 4.9.5.0 runs on .NET 8. Point EmbySystemDir (or the EMBY_SYSTEM_DIR
+         environment variable) at your Emby server's "system" directory. -->
+    <EmbySystemDir Condition="'$(EmbySystemDir)' == ''">$(EMBY_SYSTEM_DIR)</EmbySystemDir>
   </PropertyGroup>
 
   <ItemGroup>
