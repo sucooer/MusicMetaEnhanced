@@ -6,6 +6,7 @@ using Emby.Plugin.AppleMusic.Dtos;
 using Emby.Plugin.AppleMusic.ExternalIds;
 using Emby.Plugin.AppleMusic.MetadataSources;
 using Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient;
+using Emby.Plugin.AppleMusic.MetadataSources.MusicBrainz;
 using Emby.Plugin.AppleMusic.MetadataSources.Netease;
 using Emby.Plugin.AppleMusic.Utils;
 using MediaBrowser.Common.Net;
@@ -25,6 +26,7 @@ public class ArtistMetadataProvider : IRemoteMetadataProvider<MusicArtist, Artis
     private readonly IHttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IMetadataSource _metadataSource;
+    private readonly ISimpleHttpClient _simpleHttpClient;
     private readonly NeteaseMusicSource _bioSource;
 
     /// <summary>
@@ -37,7 +39,8 @@ public class ArtistMetadataProvider : IRemoteMetadataProvider<MusicArtist, Artis
         _httpClient = httpClient;
         _logger = logger;
         _metadataSource = MetadataSourceFactory.Create(logger, httpClient);
-        _bioSource = new NeteaseMusicSource(logger, new SimpleHttpClient());
+        _simpleHttpClient = new SimpleHttpClient();
+        _bioSource = new NeteaseMusicSource(logger, _simpleHttpClient);
     }
 
     /// <inheritdoc />
@@ -102,7 +105,7 @@ public class ArtistMetadataProvider : IRemoteMetadataProvider<MusicArtist, Artis
             // Emby never lets a non MusicBrainz provider win the identify dialog, so an
             // Apple Music ID can only be missing here. Fall back to a name lookup, exactly
             // like the image provider does, and only accept an exact name match.
-            artistData = await FindArtistByName(info.Name, cancellationToken).ConfigureAwait(false);
+            artistData = await FindArtistByName(info, cancellationToken).ConfigureAwait(false);
         }
 
         // Apple Music only ships biographies for a handful of artists, so a local
@@ -167,17 +170,40 @@ public class ArtistMetadataProvider : IRemoteMetadataProvider<MusicArtist, Artis
 
     /// <summary>
     /// Looks an artist up by name when the item does not carry an Apple Music ID yet.
+    /// The match attempts are, in order: exact name (kana romanization aware), a name
+    /// with a parenthesised qualifier added, and finally an alias of the same artist
+    /// (Apple Music shows 奥華子 as "Hanako Oku", which is one of the aliases MusicBrainz
+    /// stores for that artist).
     /// </summary>
-    /// <param name="name">Artist name.</param>
+    /// <param name="info">Lookup info carrying the name and the MusicBrainz ID.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Artist data, or null when no exact match was found.</returns>
-    private async Task<AppleMusicArtist?> FindArtistByName(string name, CancellationToken cancellationToken)
+    /// <returns>Artist data, or null when no match was found.</returns>
+    private async Task<AppleMusicArtist?> FindArtistByName(ArtistInfo info, CancellationToken cancellationToken)
     {
+        var name = info.Name;
         _logger.Debug("Apple Music: artist ID is not available, searching for {0}", name);
 
         var searchResults = await _metadataSource.SearchAsync(name, ItemType.Artist, cancellationToken).ConfigureAwait(false);
-        var match = searchResults.OfType<AppleMusicArtist>()
-            .FirstOrDefault(a => TitleMatcher.IsSameTitle(a.Name, name));
+        var candidates = searchResults.OfType<AppleMusicArtist>().ToList();
+
+        var match = candidates.FirstOrDefault(a => TitleMatcher.IsSameTitle(a.Name, name))
+                    ?? candidates.FirstOrDefault(a => TitleMatcher.IsSameNameIgnoringSuffix(a.Name, name));
+
+        if (match is null)
+        {
+            // Apple Music localizes some artist names, so those can never match the library
+            // name directly. The aliases of the very same artist (from MusicBrainz, and from
+            // Netease which keeps the original spelling) carry the localized form.
+            var aliases = await CollectAliasNamesAsync(info, cancellationToken).ConfigureAwait(false);
+            if (aliases.Count > 0)
+            {
+                match = candidates.FirstOrDefault(a => aliases.Any(alias => TitleMatcher.IsSameTitle(a.Name, alias)));
+                if (match is not null)
+                {
+                    _logger.Info("Apple Music: matched artist '{0}' (ID {1}) through an alias of '{2}'", match.Name, match.Id, name);
+                }
+            }
+        }
 
         if (match is null)
         {
@@ -196,6 +222,27 @@ public class ArtistMetadataProvider : IRemoteMetadataProvider<MusicArtist, Artis
 
         _logger.Info("Apple Music: matched artist '{0}' (ID {1})", match.Name, match.Id);
         return match;
+    }
+
+    /// <summary>
+    /// Collects every known spelling of a library artist: the MusicBrainz aliases of the
+    /// stored MusicBrainz ID, and the Netease aliases.
+    /// </summary>
+    /// <param name="info">Lookup info.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Alternative spellings, possibly empty.</returns>
+    private async Task<IReadOnlyList<string>> CollectAliasNamesAsync(ArtistInfo info, CancellationToken cancellationToken)
+    {
+        var names = new List<string>();
+
+        var musicBrainzId = info.GetProviderId("MusicBrainzArtist");
+        if (!string.IsNullOrEmpty(musicBrainzId))
+        {
+            names.AddRange(await MusicBrainzAliasSource.GetAliasesAsync(musicBrainzId, _simpleHttpClient, _logger, cancellationToken).ConfigureAwait(false));
+        }
+
+        names.AddRange(await _bioSource.GetArtistAliasNamesAsync(info.Name, cancellationToken).ConfigureAwait(false));
+        return names;
     }
 
     /// <inheritdoc />

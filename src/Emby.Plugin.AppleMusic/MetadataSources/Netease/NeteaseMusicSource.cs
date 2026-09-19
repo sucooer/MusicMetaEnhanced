@@ -158,6 +158,36 @@ public class NeteaseMusicSource
     }
 
     /// <summary>
+    /// Gets every spelling Netease knows for an artist: its own name, aliases and translated
+    /// names. Apple Music localizes some artist names (奥華子 is shown as "Hanako Oku"), and
+    /// Netease keeps the original one - so these spellings act as a bridge between the two.
+    /// </summary>
+    /// <param name="artistName">Artist name as stored in the library.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Alternative spellings, possibly empty.</returns>
+    public async Task<IReadOnlyList<string>> GetArtistAliasNamesAsync(string artistName, CancellationToken cancellationToken)
+    {
+        var baseUrl = ConfiguredBaseUrl;
+        if (baseUrl is null || string.IsNullOrWhiteSpace(artistName))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            var artist = await FindArtistAsync(baseUrl, artistName, forImage: false, cancellationToken).ConfigureAwait(false);
+            return artist?.Aliases ?? Array.Empty<string>();
+        }
+        catch (Exception exception)
+        {
+            // Aliases are only the third matching attempt - a failure here must never
+            // break an otherwise working metadata refresh.
+            _logger.ErrorException("Netease: failed to fetch aliases for '{0}'", exception, artistName);
+            return Array.Empty<string>();
+        }
+    }
+
+    /// <summary>
     /// Appends the Netease size parameter, which is how their CDN picks the resolution.
     /// An existing size parameter is replaced.
     /// </summary>
@@ -174,7 +204,8 @@ public class NeteaseMusicSource
     /// </summary>
     /// <param name="Id">Netease artist id.</param>
     /// <param name="ImageUrl">Artist image URL without a size parameter.</param>
-    private sealed record NeteaseArtistMatch(string Id, string? ImageUrl);
+    /// <param name="Aliases">Every spelling Netease knows for this artist.</param>
+    private sealed record NeteaseArtistMatch(string Id, string? ImageUrl, IReadOnlyList<string> Aliases);
 
     private async Task<NeteaseArtistMatch?> FindArtistAsync(string baseUrl, string artistName, bool forImage, CancellationToken cancellationToken)
     {
@@ -211,10 +242,39 @@ public class NeteaseMusicSource
                 ? null
                 : StripSizeParameter(picture!);
 
-            return new NeteaseArtistMatch(id!, imageUrl);
+            return new NeteaseArtistMatch(id!, imageUrl, CollectSpellings(artist));
         }
 
         return null;
+    }
+
+    private static IReadOnlyList<string> CollectSpellings(JsonElement artist)
+    {
+        var names = new List<string>();
+        foreach (var field in new[] { "name", "alias", "transNames" })
+        {
+            if (!artist.TryGetProperty(field, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
+            {
+                names.Add(value.GetString()!);
+            }
+            else if (value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in value.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()))
+                    {
+                        names.Add(item.GetString()!);
+                    }
+                }
+            }
+        }
+
+        return names;
     }
 
     private static string StripSizeParameter(string url)

@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using Emby.Plugin.AppleMusic.Dtos;
 using Emby.Plugin.AppleMusic.ExternalIds;
 using Emby.Plugin.AppleMusic.MetadataSources;
+using Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient;
+using Emby.Plugin.AppleMusic.MetadataSources.MusicBrainz;
+using Emby.Plugin.AppleMusic.MetadataSources.Netease;
 using Emby.Plugin.AppleMusic.Utils;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities;
@@ -25,6 +28,8 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
     private readonly IHttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IMetadataSource _metadataSource;
+    private readonly ISimpleHttpClient _simpleHttpClient;
+    private readonly NeteaseMusicSource _neteaseSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ArtistImageProvider"/> class.
@@ -36,6 +41,8 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         _httpClient = httpClient;
         _logger = logger;
         _metadataSource = MetadataSourceFactory.Create(logger, httpClient);
+        _simpleHttpClient = new SimpleHttpClient();
+        _neteaseSource = new NeteaseMusicSource(logger, _simpleHttpClient);
     }
 
     /// <inheritdoc />
@@ -137,17 +144,33 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         // Apple Music's artist search is fuzzy - searching とた also returns Pete Townshend and
         // Pat Benatar - so only a result with the same name may be used. A parenthesised suffix
         // is tolerated ("fripSide(vocal:Mao Uesugi)" for the library's fripSide), but only as a
-        // second attempt. Apple sorts by relevance, so the first match is the best one; later
-        // matches are just different artists sharing the name (there are two artists called
-        // "Tota"), and offering them would only make the picker confusing.
-        var match = searchResults
-            .OfType<AppleMusicArtist>()
+        // second attempt. The third attempt bridges localized names (Apple Music shows 奥華子 as
+        // "Hanako Oku") through the aliases of the same artist. Apple sorts by relevance, so the
+        // first match is the best one; later matches are just different artists sharing the name
+        // (there are two artists called "Tota"), and offering them would only confuse the picker.
+        var candidates = searchResults.OfType<AppleMusicArtist>().ToList();
+
+        var match = candidates
             .FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.ImageUrl)
                                          && TitleMatcher.IsSameTitle(candidate.Name, artist.Name))
-            ?? searchResults
-                .OfType<AppleMusicArtist>()
+            ?? candidates
                 .FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.ImageUrl)
                                              && TitleMatcher.IsSameNameIgnoringSuffix(candidate.Name, artist.Name));
+
+        if (match is null)
+        {
+            var aliases = await CollectAliasNamesAsync(artist, cancellationToken).ConfigureAwait(false);
+            if (aliases.Count > 0)
+            {
+                match = candidates
+                    .FirstOrDefault(candidate => !string.IsNullOrEmpty(candidate.ImageUrl)
+                                                 && aliases.Any(alias => TitleMatcher.IsSameTitle(candidate.Name, alias)));
+                if (match is not null)
+                {
+                    _logger.Info("Apple Music: matched artist '{0}' through an alias of '{1}'", match.Name, artist.Name);
+                }
+            }
+        }
 
         if (match is null)
         {
@@ -164,6 +187,27 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         return !string.IsNullOrEmpty(artist.ImageUrl)
                || !string.IsNullOrEmpty(artist.WideImageUrl)
                || !string.IsNullOrEmpty(artist.LogoUrl);
+    }
+
+    /// <summary>
+    /// Collects every known spelling of a library artist: the MusicBrainz aliases of the
+    /// stored MusicBrainz ID, and the Netease aliases.
+    /// </summary>
+    /// <param name="artist">Library artist.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Alternative spellings, possibly empty.</returns>
+    private async Task<IReadOnlyList<string>> CollectAliasNamesAsync(MusicArtist artist, CancellationToken cancellationToken)
+    {
+        var names = new List<string>();
+
+        var musicBrainzId = artist.GetProviderId("MusicBrainzArtist");
+        if (!string.IsNullOrEmpty(musicBrainzId))
+        {
+            names.AddRange(await MusicBrainzAliasSource.GetAliasesAsync(musicBrainzId, _simpleHttpClient, _logger, cancellationToken).ConfigureAwait(false));
+        }
+
+        names.AddRange(await _neteaseSource.GetArtistAliasNamesAsync(artist.Name, cancellationToken).ConfigureAwait(false));
+        return names;
     }
 
     /// <inheritdoc />
