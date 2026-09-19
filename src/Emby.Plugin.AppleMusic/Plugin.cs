@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Emby.Plugin.AppleMusic.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 
@@ -11,7 +13,7 @@ namespace Emby.Plugin.AppleMusic;
 /// <summary>
 /// The Apple Music metadata plugin for Emby.
 /// </summary>
-public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
+public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasThumbImage
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="Plugin"/> class.
@@ -53,5 +55,15 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 MenuIcon = "audiotrack",
             },
         };
+    }
+
+    /// <inheritdoc />
+    public ImageFormat ThumbImageFormat => ImageFormat.Jpg;
+
+    /// <inheritdoc />
+    public Stream GetThumbImage()
+    {
+        var stream = GetType().Assembly.GetManifestResourceStream(GetType().Namespace + ".Configuration.plugin.jpg");
+        return stream ?? Stream.Null;
     }
 }
