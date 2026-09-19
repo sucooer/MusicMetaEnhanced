@@ -1,0 +1,8 @@
+bin/
+obj/
+*.log
+*.user
+.vs/
+
+# Local workspace memory and scratch files
+.workbuddy/

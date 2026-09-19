@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Emby.Plugin.AppleMusic</RootNamespace>
+    <AssemblyName>Emby.Plugin.AppleMusic</AssemblyName>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Emby 4.9.5.0 runs on .NET 8 -->
+    <EmbySystemDir Condition="'$(EmbySystemDir)' == ''">C:\Users\user\programs\embyserver\system</EmbySystemDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Emby server assemblies. Private=false: never copy them next to the plugin. -->
+    <Reference Include="MediaBrowser.Common">
+      <HintPath>$(EmbySystemDir)\MediaBrowser.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MediaBrowser.Controller">
+      <HintPath>$(EmbySystemDir)\MediaBrowser.Controller.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MediaBrowser.Model">
+      <HintPath>$(EmbySystemDir)\MediaBrowser.Model.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
