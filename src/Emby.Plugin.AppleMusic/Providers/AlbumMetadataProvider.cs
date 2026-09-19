@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Emby.Plugin.AppleMusic.Dtos;
 using Emby.Plugin.AppleMusic.ExternalIds;
 using Emby.Plugin.AppleMusic.MetadataSources;
+using Emby.Plugin.AppleMusic.MetadataSources.Itunes;
+using Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient;
 using Emby.Plugin.AppleMusic.Utils;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities.Audio;
@@ -24,6 +26,7 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
     private readonly IHttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IMetadataSource _metadataSource;
+    private readonly ItunesAlbumSource _itunes;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AlbumMetadataProvider"/> class.
@@ -35,6 +38,7 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
         _httpClient = httpClient;
         _logger = logger;
         _metadataSource = MetadataSourceFactory.Create(logger, httpClient);
+        _itunes = new ItunesAlbumSource(new SimpleHttpClient(), logger);
     }
 
     /// <inheritdoc />
@@ -90,6 +94,136 @@ public class AlbumMetadataProvider : IRemoteMetadataProvider<MusicAlbum, AlbumIn
 
     /// <inheritdoc />
     public async Task<MetadataResult<MusicAlbum>> GetMetadata(AlbumInfo info, CancellationToken cancellationToken)
+    {
+        // When a dedicated album storefront is configured (e.g. "jp" for a Japanese
+        // library), the identifying fields come from the iTunes API in that storefront's
+        // own script; the web data source stays as fallback.
+        var storefront = PluginUtils.ConfiguredAlbumStorefront;
+        if (!string.IsNullOrEmpty(storefront))
+        {
+            var fromItunes = await GetMetadataFromItunes(info, storefront!, cancellationToken).ConfigureAwait(false);
+            if (fromItunes is not null)
+            {
+                return fromItunes;
+            }
+
+            _logger.Info("Apple Music: no album data from the {0} storefront, falling back to the web source", storefront);
+        }
+
+        return await GetMetadataFromWeb(info, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the album metadata from the iTunes API in the configured storefront.
+    /// </summary>
+    /// <param name="info">Lookup info.</param>
+    /// <param name="storefront">Storefront code, e.g. "jp".</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Metadata result, or null when nothing was found in that storefront.</returns>
+    private async Task<MetadataResult<MusicAlbum>?> GetMetadataFromItunes(AlbumInfo info, string storefront, CancellationToken cancellationToken)
+    {
+        var appleMusicId = info.GetProviderId(ProviderKey.AppleMusicAlbum);
+        ItunesAlbumData? data;
+
+        if (!string.IsNullOrEmpty(appleMusicId))
+        {
+            data = await _itunes.LookupAsync(appleMusicId!, storefront, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            data = await FindAlbumInItunes(info, storefront, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (data is null)
+        {
+            return null;
+        }
+
+        // The web pages ship an editorial description the iTunes API usually lacks.
+        var overview = data.Description;
+        if (string.IsNullOrWhiteSpace(overview))
+        {
+            var webData = await _metadataSource.GetAlbumAsync(data.Id, cancellationToken).ConfigureAwait(false);
+            overview = webData?.About;
+        }
+
+        var item = new MusicAlbum
+        {
+            Overview = overview,
+            ProductionYear = data.Year,
+            Artists = string.IsNullOrEmpty(data.ArtistName) ? Array.Empty<string>() : new[] { data.ArtistName! },
+            AlbumArtists = string.IsNullOrEmpty(data.ArtistName) ? Array.Empty<string>() : new[] { data.ArtistName! },
+        };
+
+        if (data.Genre is not null)
+        {
+            item.Genres = new[] { data.Genre };
+        }
+
+        var resolvedById = !string.IsNullOrEmpty(appleMusicId);
+
+        // Same rule as the web path: a stored ID is authoritative, otherwise the title
+        // must be literally identical before it may rename the item.
+        if (resolvedById || TitleMatcher.IsSameLiteralTitle(data.Name, info.Name))
+        {
+            item.Name = data.Name;
+        }
+
+        var metadataResult = new MetadataResult<MusicAlbum>
+        {
+            Item = item,
+            HasMetadata = !string.IsNullOrEmpty(item.Name) || !string.IsNullOrEmpty(item.Overview),
+        };
+
+        if (!string.IsNullOrEmpty(data.ArtistId))
+        {
+            metadataResult.Item.SetProviderId(ProviderKey.AppleMusicAlbumArtist, data.ArtistId!);
+        }
+
+        metadataResult.Item.SetProviderId(ProviderKey.AppleMusicAlbum, data.Id);
+        _logger.Info("Apple Music: album '{0}' ({1}, {2}) resolved from the {3} storefront", data.Name, data.Id, data.Year, storefront);
+        return metadataResult;
+    }
+
+    /// <summary>
+    /// Searches the iTunes API for an album by name when the item has no stored ID yet.
+    /// </summary>
+    /// <param name="info">Lookup info.</param>
+    /// <param name="storefront">Storefront code.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Album data, or null when nothing matching was found.</returns>
+    private async Task<ItunesAlbumData?> FindAlbumInItunes(AlbumInfo info, string storefront, CancellationToken cancellationToken)
+    {
+        var albumArtist = info.AlbumArtists?.FirstOrDefault() ?? string.Empty;
+        var term = string.IsNullOrEmpty(albumArtist) ? info.Name : albumArtist + " " + info.Name;
+
+        var results = await _itunes.SearchAsync(term, storefront, cancellationToken).ConfigureAwait(false);
+        var candidates = results
+            .Where(a => TitleMatcher.IsSameTitle(a.Name, info.Name))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            _logger.Info("Apple Music: the {0} storefront has no album matching '{1}'", storefront, info.Name);
+            return null;
+        }
+
+        var match = info.Year.HasValue
+            ? candidates.FirstOrDefault(a => a.Year == info.Year) ?? candidates[0]
+            : candidates[0];
+
+        _logger.Info("Apple Music: matched album '{0}' (ID {1}) in the {2} storefront", match.Name, match.Id, storefront);
+        return await _itunes.LookupAsync(match.Id, storefront, cancellationToken).ConfigureAwait(false) ?? match;
+    }
+
+    /// <summary>
+    /// The original web data path, used when no album storefront is configured or the
+    /// configured one had nothing.
+    /// </summary>
+    /// <param name="info">Lookup info.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Metadata result.</returns>
+    private async Task<MetadataResult<MusicAlbum>> GetMetadataFromWeb(AlbumInfo info, CancellationToken cancellationToken)
     {
         var appleMusicId = info.GetProviderId(ProviderKey.AppleMusicAlbum);
         var resolvedById = !string.IsNullOrEmpty(appleMusicId);

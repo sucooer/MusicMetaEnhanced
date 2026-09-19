@@ -32,6 +32,35 @@ if (args.Length > 0 && args[0] == "--netease" && args.Length > 1)
     return 0;
 }
 
+if (args.Length > 0 && args[0] == "--itunes" && args.Length > 2)
+{
+    // Reproduce the exact plugin path: ItunesAlbumSource over SimpleHttpClient.
+    var itunes = new Emby.Plugin.AppleMusic.MetadataSources.Itunes.ItunesAlbumSource(
+        new Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient.SimpleHttpClient(),
+        new ConsoleLogger());
+    var albumId = args[1];
+    var storefront = args[2];
+
+    Console.WriteLine($"lookup {albumId} in {storefront} ...");
+    var album = await itunes.LookupAsync(albumId, storefront, CancellationToken.None);
+    if (album is null)
+    {
+        Console.WriteLine("(null)");
+        var raw = await new Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient.SimpleHttpClient().GetStringAsync(
+            $"https://itunes.apple.com/lookup?id={albumId}&country={storefront}&entity=song&limit=200");
+        Console.WriteLine($"raw body head: {Trunc(raw)}");
+    }
+    else
+    {
+        Console.WriteLine($"  id      : {album.Id}");
+        Console.WriteLine($"  name    : {album.Name}");
+        Console.WriteLine($"  artist  : {album.ArtistName} ({album.ArtistId})");
+        Console.WriteLine($"  year    : {album.Year} | genre: {album.Genre} | tracks: {album.TrackCount}");
+    }
+
+    return 0;
+}
+
 if (args.Length > 0 && args[0] == "--match" && args.Length > 1)
 {
     // args[1] is a UTF-8 file with one artist name per line.

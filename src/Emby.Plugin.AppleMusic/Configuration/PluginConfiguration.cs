@@ -14,6 +14,16 @@ public class PluginConfiguration : BasePluginConfiguration
     public string Storefront { get; set; } = "cn";
 
     /// <summary>
+    /// Gets or sets the storefront used for album metadata, for example "jp".
+    /// Album names are kept in their original script everywhere, but artist names and
+    /// some track titles are localized per storefront (奥華子 becomes "Hanako Oku" outside
+    /// Japan). Japanese libraries get the original spellings from the Japanese storefront.
+    /// Album data is read through the iTunes API, whose country parameter is not subject
+    /// to the IP based geo redirect the web pages use. Empty follows the main storefront.
+    /// </summary>
+    public string AlbumStorefront { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the (experimental) Apple Music JSON API
     /// should be used instead of scraping the Apple Music website.
     /// </summary>

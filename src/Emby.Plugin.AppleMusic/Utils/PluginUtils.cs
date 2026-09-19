@@ -34,6 +34,19 @@ public static class PluginUtils
     public static string AppleMusicBaseUrl => $"https://music.apple.com/{Storefront}";
 
     /// <summary>
+    /// Gets the storefront album metadata should come from, or null when albums follow
+    /// the main storefront. See <see cref="Configuration.PluginConfiguration.AlbumStorefront"/>.
+    /// </summary>
+    public static string? ConfiguredAlbumStorefront
+    {
+        get
+        {
+            var configured = Plugin.Instance?.Configuration?.AlbumStorefront;
+            return string.IsNullOrWhiteSpace(configured) ? null : configured.Trim().ToLowerInvariant();
+        }
+    }
+
+    /// <summary>
     /// Update image resolution (width)x(height)(opts) in an image URL.
     /// For example 1400x1400cc is an image with 1400x1400 resolution, center cropped.
     /// </summary>
