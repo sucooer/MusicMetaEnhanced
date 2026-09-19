@@ -50,7 +50,7 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
     /// <inheritdoc />
     public IEnumerable<ImageType> GetSupportedImages(BaseItem item)
     {
-        return new List<ImageType> { ImageType.Primary };
+        return new List<ImageType> { ImageType.Primary, ImageType.Backdrop, ImageType.Logo };
     }
 
     /// <inheritdoc />
@@ -65,19 +65,68 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         var appleMusicId = artist.GetProviderId(ProviderKey.AppleMusicArtist)
                            ?? artist.GetProviderId(ProviderKey.AppleMusicAlbumArtist);
 
+        var detail = await FindArtistAsync(artist, appleMusicId, cancellationToken).ConfigureAwait(false);
+        if (detail is null)
+        {
+            // Artists that Apple Music localizes (花澤香菜 -> 花泽香菜) or has no image for at all
+            // are covered by the separate Netease provider, which shows up as its own source in
+            // Emby's picker.
+            _logger.Info("Apple Music: no artist named '{0}' was found, no images to offer", artist.Name);
+            return new List<RemoteImageInfo>();
+        }
+
+        // Apple Music ships an avatar for most artists, a wide artwork (2:1, the only genuinely
+        // landscape image it has) for some, and a logo for a few - so each type is offered only
+        // when it actually exists.
+        var images = new List<RemoteImageInfo>();
+
+        if (!string.IsNullOrEmpty(detail.ImageUrl))
+        {
+            images.Add(CreateImageInfo(detail.ImageUrl!, ImageType.Primary, 1400, 1400, "1400x1400cc", "100x100cc"));
+        }
+
+        if (!string.IsNullOrEmpty(detail.WideImageUrl))
+        {
+            images.Add(CreateImageInfo(detail.WideImageUrl!, ImageType.Backdrop, 2000, 1125, "2000x1125bb", "400x225bb"));
+        }
+
+        if (!string.IsNullOrEmpty(detail.LogoUrl))
+        {
+            // Logos are wide (实测 1000x353) and must stay png to keep their transparency.
+            images.Add(CreateImageInfo(detail.LogoUrl!, ImageType.Logo, 1000, 353, "1000x1000bb", "200x200bb", "png"));
+        }
+
+        _logger.Info(
+            "Apple Music: offering {0} image(s) for '{1}' (matched '{2}')",
+            images.Count,
+            artist.Name,
+            detail.Name);
+
+        return images;
+    }
+
+    /// <summary>
+    /// Finds the Apple Music artist backing a library artist: by the stored ID when there is one,
+    /// otherwise by name. The ID is preferred because it is exact, but a stored ID can point at
+    /// an artist Apple Music has no image for (the library artist 瑞葵 carries such an ID), so
+    /// both routes end up checking the detail page.
+    /// </summary>
+    /// <param name="artist">Library artist.</param>
+    /// <param name="appleMusicId">Stored Apple Music ID, if any.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Artist detail, or null when nothing matching was found.</returns>
+    private async Task<AppleMusicArtist?> FindArtistAsync(MusicArtist artist, string? appleMusicId, CancellationToken cancellationToken)
+    {
         if (!string.IsNullOrEmpty(appleMusicId))
         {
             _logger.Info("Apple Music: using ID {0} for artist image lookup", appleMusicId);
-            var byId = await GetImageById(appleMusicId!, cancellationToken).ConfigureAwait(false);
-            if (byId.Count > 0)
+            var byId = await _metadataSource.GetArtistAsync(appleMusicId!, cancellationToken).ConfigureAwait(false);
+            if (byId is not null && HasAnyImage(byId))
             {
                 return byId;
             }
 
-            // A stored ID can point at an artist Apple Music itself has no image for (the
-            // library artist 瑞葵 carries such an ID), so do not stop here - fall through to
-            // the name lookup, and from there to the Netease fallback.
-            _logger.Info("Apple Music: artist ID {0} has no image, falling back to a name lookup", appleMusicId);
+            _logger.Info("Apple Music: artist ID {0} has no usable image, falling back to a name lookup", appleMusicId);
         }
 
         _logger.Info("Apple Music: looking up the image of '{0}' by name", artist.Name);
@@ -102,15 +151,19 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
 
         if (match is null)
         {
-            // Nothing here. Artists that Apple Music localizes (花澤香菜 -> 花泽香菜) or has no
-            // image for at all are covered by the separate Netease provider, which shows up as
-            // its own source in Emby's picker.
-            _logger.Info("Apple Music: no artist named '{0}' was found, no images to offer", artist.Name);
-            return new List<RemoteImageInfo>();
+            return null;
         }
 
-        _logger.Info("Apple Music: matched artist '{0}' (ID {1})", match.Name, match.Id);
-        return new List<RemoteImageInfo> { CreateImageInfo(match.ImageUrl!) };
+        // A search hit only carries the avatar: the wide artwork and the logo live on the detail
+        // page, so fetch it when the name lookup is what found the artist.
+        return await _metadataSource.GetArtistAsync(match.Id, cancellationToken).ConfigureAwait(false) ?? match;
+    }
+
+    private static bool HasAnyImage(AppleMusicArtist artist)
+    {
+        return !string.IsNullOrEmpty(artist.ImageUrl)
+               || !string.IsNullOrEmpty(artist.WideImageUrl)
+               || !string.IsNullOrEmpty(artist.LogoUrl);
     }
 
     /// <inheritdoc />
@@ -123,28 +176,16 @@ public class ArtistImageProvider : IRemoteImageProvider, IHasOrder
         });
     }
 
-    private RemoteImageInfo CreateImageInfo(string imageUrl)
+    private RemoteImageInfo CreateImageInfo(string templateUrl, ImageType type, int width, int height, string detailSize, string thumbnailSize, string extension = "jpg")
     {
         return new RemoteImageInfo
         {
-            Height = 1400,
-            Width = 1400,
+            Height = height,
+            Width = width,
             ProviderName = Name,
-            ThumbnailUrl = PluginUtils.UpdateImageSize(imageUrl, "100x100cc"),
-            Type = ImageType.Primary,
-            Url = PluginUtils.UpdateImageSize(imageUrl, "1400x1400cc"),
+            ThumbnailUrl = PluginUtils.UpdateImageSize(templateUrl, thumbnailSize, extension),
+            Type = type,
+            Url = PluginUtils.UpdateImageSize(templateUrl, detailSize, extension),
         };
-    }
-
-    private async Task<List<RemoteImageInfo>> GetImageById(string appleMusicId, CancellationToken cancellationToken)
-    {
-        var artistData = await _metadataSource.GetArtistAsync(appleMusicId, cancellationToken).ConfigureAwait(false);
-        if (artistData?.ImageUrl is null)
-        {
-            _logger.Debug("Apple Music: could not find image for artist ID {0}", appleMusicId);
-            return new List<RemoteImageInfo>();
-        }
-
-        return new List<RemoteImageInfo> { CreateImageInfo(artistData.ImageUrl) };
     }
 }

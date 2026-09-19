@@ -32,6 +32,17 @@ public class AppleMusicArtist : IAppleMusicItem
     /// <inheritdoc />
     public string? ImageUrl { get; set; }
 
+    /// <summary>
+    /// Gets or sets the wide (2:1) artwork URL. Apple Music ships this for some artists only
+    /// and it is the only genuinely landscape image the service has, so it backs backdrops.
+    /// </summary>
+    public string? WideImageUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the artist logo URL (a transparent PNG when Apple Music has one).
+    /// </summary>
+    public string? LogoUrl { get; set; }
+
     /// <inheritdoc />
     public string? About { get; set; }
 

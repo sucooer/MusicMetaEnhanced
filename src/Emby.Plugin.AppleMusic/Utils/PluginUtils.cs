@@ -39,8 +39,9 @@ public static class PluginUtils
     /// </summary>
     /// <param name="url">URL to work with.</param>
     /// <param name="newImageRes">New image resolution.</param>
+    /// <param name="extension">File extension; artist logos must stay png to keep transparency.</param>
     /// <returns>Updated URL.</returns>
-    public static string UpdateImageSize(string url, string newImageRes)
+    public static string UpdateImageSize(string url, string newImageRes, string extension = "jpg")
     {
         var idx = url.LastIndexOf('/');
         if (idx < 0)
@@ -48,7 +49,7 @@ public static class PluginUtils
             return url;
         }
 
-        return string.Concat(url.AsSpan(0, idx + 1), newImageRes, ".jpg");
+        return string.Concat(url.AsSpan(0, idx + 1), newImageRes, ".", extension);
     }
 
     /// <summary>

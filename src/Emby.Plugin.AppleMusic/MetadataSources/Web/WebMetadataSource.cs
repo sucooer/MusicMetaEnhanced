@@ -275,6 +275,14 @@ public class WebMetadataSource : IMetadataSource
             ImageUrl = ResolveArtwork(item, "circleArtwork")
                        ?? ResolveArtwork(item, "artistLogo")
                        ?? ResolveArtwork(item, "artwork"),
+
+            // wideArtwork is the only genuinely landscape image Apple Music ships (2:1), and it
+            // exists for some artists only - it is what backdrops are made of.
+            WideImageUrl = ResolveArtwork(item, "wideArtwork", 2000, 1125),
+
+            // A transparent artist logo, used for the Logo image type. It must stay png:
+            // requesting the same image as jpg drops the transparency (6 KB against 37 KB).
+            LogoUrl = ResolveArtwork(item, "artistLogo", 1000, 1000, "png"),
         };
     }
 
@@ -391,10 +399,10 @@ public class WebMetadataSource : IMetadataSource
         return null;
     }
 
-    private static string? ResolveArtwork(JsonElement item, string propertyName)
+    private static string? ResolveArtwork(JsonElement item, string propertyName, int width = 1200, int height = 1200, string format = "jpg")
     {
         var url = AppleMusicPageParser.GetStringPath(item, propertyName, "dictionary", "url");
-        return string.IsNullOrEmpty(url) ? null : PluginUtils.ResolveArtworkUrl(url!);
+        return string.IsNullOrEmpty(url) ? null : PluginUtils.ResolveArtworkUrl(url!, width, height, format);
     }
 
     private static DateTime? ParseYear(string? text)
