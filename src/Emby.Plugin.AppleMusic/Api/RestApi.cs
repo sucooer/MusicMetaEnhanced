@@ -108,7 +108,7 @@ public class RestApi : IService, IRequiresRequest
         config.UseJsonSource = request.UseJsonSource;
         Plugin.Instance.SaveConfiguration();
         _logger.Info("Apple Music: configuration saved from the dashboard (storefront {0}, album storefront '{1}')", config.Storefront, config.AlbumStorefront);
-        Request.Response.Redirect("../web/index.html#!/configurationpage?name=applemusic");
+        Request.Response.Redirect("/emby/web/index.html#!/configurationpage?name=applemusic");
     }
 
     /// <summary>
@@ -270,7 +270,7 @@ public class RestApi : IService, IRequiresRequest
         var page = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>" + HtmlEncode(title) +
                    "</title></head><body style=\"font-family:sans-serif;max-width:36em;margin:4em auto;padding:0 1em;\"><h2>" +
                    HtmlEncode(title) + "</h2><p>" + bodyHtml +
-                   "</p><p><a href=\"../web/index.html#!/configurationpage?name=applemusic\">返回 Apple Music 配置页</a></p></body></html>";
+                   "</p><p><a href=\"/emby/web/index.html#!/configurationpage?name=applemusic\">返回 Apple Music 配置页</a></p></body></html>";
 
         var response = Request.Response;
         response.ContentType = "text/html; charset=utf-8";

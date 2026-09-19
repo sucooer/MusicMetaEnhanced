@@ -72,7 +72,7 @@
 
                 <div class="sectionTitle">国家 / 地区</div>
 
-                <form method="post" action="../AppleMusic/SaveConfig">
+                <form method="post" action="/emby/AppleMusic/SaveConfig">
                     <label for="storefront">Storefront（艺人 / 简介数据源）</label>
                     <select id="storefront" name="Storefront">
                         <option value="cn">cn — 中国大陆</option>
@@ -112,7 +112,7 @@
 
                     <div>
                         <button is="emby-button" type="submit" class="am-btn"><span>保存配置</span></button>
-                        <a class="am-btn am-btn-grey" href="../AppleMusic/Status" target="_blank" rel="noopener">查看当前配置与状态</a>
+                        <a class="am-btn am-btn-grey" href="/emby/AppleMusic/Status" target="_blank" rel="noopener">查看当前配置与状态</a>
                     </div>
                 </form>
 
@@ -120,20 +120,20 @@
                 <p class="hint">刷新在服务器后台执行，点击后可离开此页；大量条目时请耐心等待完成后查看结果。</p>
 
                 <div>
-                    <a class="am-btn am-btn-green" href="../AppleMusic/Action?op=refresh-artists">刷新全部艺人元数据</a>
-                    <a class="am-btn" href="../AppleMusic/Action?op=refresh-artists&amp;replace=true">刷新全部艺人（替换已有值）</a>
+                    <a class="am-btn am-btn-green" href="/emby/AppleMusic/Action?op=refresh-artists">刷新全部艺人元数据</a>
+                    <a class="am-btn" href="/emby/AppleMusic/Action?op=refresh-artists&amp;replace=true">刷新全部艺人（替换已有值）</a>
                 </div>
                 <p class="hint">按名字匹配补全缺失的简介 / Apple Music ID；「替换已有值」会同时覆盖已有简介并把外部 ID 清空重写。</p>
 
                 <div>
-                    <a class="am-btn am-btn-green" href="../AppleMusic/Action?op=refresh-albums">刷新全部专辑元数据</a>
-                    <a class="am-btn" href="../AppleMusic/Action?op=refresh-albums&amp;replace=true">刷新全部专辑（替换已有值）</a>
+                    <a class="am-btn am-btn-green" href="/emby/AppleMusic/Action?op=refresh-albums">刷新全部专辑元数据</a>
+                    <a class="am-btn" href="/emby/AppleMusic/Action?op=refresh-albums&amp;replace=true">刷新全部专辑（替换已有值）</a>
                 </div>
                 <p class="hint">用当前 AlbumStorefront 区域补全专辑名 / 年份 / 流派 / Apple Music ID。</p>
 
                 <div>
-                    <a class="am-btn am-btn-grey" href="../AppleMusic/Action?op=test-netease">测试网易云 API 连通性</a>
-                    <a class="am-btn am-btn-grey" href="../AppleMusic/Action?op=test-apple">测试 Apple Music 连通性</a>
+                    <a class="am-btn am-btn-grey" href="/emby/AppleMusic/Action?op=test-netease">测试网易云 API 连通性</a>
+                    <a class="am-btn am-btn-grey" href="/emby/AppleMusic/Action?op=test-apple">测试 Apple Music 连通性</a>
                 </div>
 
             </div>
