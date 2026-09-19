@@ -6,7 +6,7 @@ rem First time setup:
 rem   mkdir "%USERPROFILE%\programs\ncm-api" && cd /d "%USERPROFILE%\programs\ncm-api"
 rem   npm init -y && npm i @neteasecloudmusicapienhanced/api
 rem
-rem Then point the plugin at it (EmbyRoot\programdata\plugins\configurations\Emby.Plugin.AppleMusic.xml):
+rem Then point the plugin at it (EmbyRoot\programdata\plugins\configurations\Emby.Plugin.MusicMetaEnhanced.xml):
 rem   <NeteaseApiBaseUrl>http://127.0.0.1:3055</NeteaseApiBaseUrl>
 
 set PORT=3055

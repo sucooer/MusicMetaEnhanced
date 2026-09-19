@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Emby.Plugin.AppleMusic\Emby.Plugin.AppleMusic.csproj" />
+    <ProjectReference Include="..\..\src\Emby.Plugin.MusicMetaEnhanced\Emby.Plugin.MusicMetaEnhanced.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,8 +1,8 @@
 using System.Text;
-using Emby.Plugin.AppleMusic.Dtos;
-using Emby.Plugin.AppleMusic.MetadataSources;
-using Emby.Plugin.AppleMusic.MetadataSources.Web;
-using Emby.Plugin.AppleMusic.Utils;
+using Emby.Plugin.MusicMetaEnhanced.Dtos;
+using Emby.Plugin.MusicMetaEnhanced.MetadataSources;
+using Emby.Plugin.MusicMetaEnhanced.MetadataSources.Web;
+using Emby.Plugin.MusicMetaEnhanced.Utils;
 using MediaBrowser.Model.Logging;
 using ScrapeTest;
 
@@ -12,9 +12,9 @@ if (args.Length > 0 && args[0] == "--netease" && args.Length > 1)
 {
     // How many library artists can get an image from the Netease source.
     var names = File.ReadAllLines(args[1]).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-    var neteaseSource = new Emby.Plugin.AppleMusic.MetadataSources.Netease.NeteaseMusicSource(
+    var neteaseSource = new Emby.Plugin.MusicMetaEnhanced.MetadataSources.Netease.NeteaseMusicSource(
         new ConsoleLogger(),
-        new Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient.SimpleHttpClient());
+        new Emby.Plugin.MusicMetaEnhanced.MetadataSources.Json.ApiClient.SimpleHttpClient());
 
     var found = 0;
     foreach (var name in names)
@@ -35,8 +35,8 @@ if (args.Length > 0 && args[0] == "--netease" && args.Length > 1)
 if (args.Length > 0 && args[0] == "--itunes" && args.Length > 2)
 {
     // Reproduce the exact plugin path: ItunesAlbumSource over SimpleHttpClient.
-    var itunes = new Emby.Plugin.AppleMusic.MetadataSources.Itunes.ItunesAlbumSource(
-        new Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient.SimpleHttpClient(),
+    var itunes = new Emby.Plugin.MusicMetaEnhanced.MetadataSources.Itunes.ItunesAlbumSource(
+        new Emby.Plugin.MusicMetaEnhanced.MetadataSources.Json.ApiClient.SimpleHttpClient(),
         new ConsoleLogger());
     var albumId = args[1];
     var storefront = args[2];
@@ -46,7 +46,7 @@ if (args.Length > 0 && args[0] == "--itunes" && args.Length > 2)
     if (album is null)
     {
         Console.WriteLine("(null)");
-        var raw = await new Emby.Plugin.AppleMusic.MetadataSources.Json.ApiClient.SimpleHttpClient().GetStringAsync(
+        var raw = await new Emby.Plugin.MusicMetaEnhanced.MetadataSources.Json.ApiClient.SimpleHttpClient().GetStringAsync(
             $"https://itunes.apple.com/lookup?id={albumId}&country={storefront}&entity=song&limit=200");
         Console.WriteLine($"raw body head: {Trunc(raw)}");
     }

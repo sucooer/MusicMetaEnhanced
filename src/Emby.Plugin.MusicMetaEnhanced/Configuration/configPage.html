@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Music Meta Enhanced</title>
+</head>
+<body>
+    <div id="AppleMusicConfigurationPage" data-role="page" class="page type-interior pluginConfigurationPage">
+
+        <style>
+            /* Emby 4.9+ renders plugin configuration pages as an overlay; the style tag
+               lives inside the page div because Emby strips <head> when injecting pages.
+
+               NOTE: Emby 4.9 does NOT execute inline <script> inside plugin pages. The
+               actual form is served dynamically by the plugin (RestApi /FormPage) so it
+               can show the saved values; the iframe keeps the outer dashboard page from
+               reloading on submit. */
+            #AppleMusicConfigurationPage {
+                background: #fff;
+                min-height: 100%;
+                padding: 0;
+                margin: 0;
+            }
+            #AppleMusicConfigurationPage iframe {
+                width: 100%;
+                height: 2650px;
+                border: 0;
+                display: block;
+            }
+        </style>
+
+        <div data-role="content">
+            <iframe src="/emby/MusicMeta/FormPage?v=19"></iframe>
+        </div>
+    </div>
+</body>
+</html>

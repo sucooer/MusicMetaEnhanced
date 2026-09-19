@@ -4,7 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const DEBUG_PORT = process.env.DEBUG_PORT || '9226';
 const KEY = process.env.EMBY_API_KEY || '';
-const SITE = `http://localhost:8096/emby/web/configurationpage?name=applemusic&api_key=${KEY}`;
+const SITE = `http://localhost:8096/emby/web/configurationpage?name=musicmeta&api_key=${KEY}`;
 
 const send = (ws, msg) => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('cdp timeout: ' + msg.method)), 30000);

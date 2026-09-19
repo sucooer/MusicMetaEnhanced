@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Emby.Plugin.MusicMetaEnhanced</RootNamespace>
+    <AssemblyName>Emby.Plugin.MusicMetaEnhanced</AssemblyName>
+    <AssemblyVersion>1.5.10.0</AssemblyVersion>
+    <FileVersion>1.5.10.0</FileVersion>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Emby 4.9.5.0 runs on .NET 8. Point EmbySystemDir (or the EMBY_SYSTEM_DIR
+         environment variable) at your Emby server's "system" directory. -->
+    <EmbySystemDir Condition="'$(EmbySystemDir)' == ''">$(EMBY_SYSTEM_DIR)</EmbySystemDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Dashboard configuration page, served from inside the DLL. -->
+    <EmbeddedResource Include="Configuration\configPage.html" />
+    <!-- Plugin thumb image, shown on the dashboard Plugins page (IHasThumbImage). -->
+    <EmbeddedResource Include="Configuration\plugin.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Emby server assemblies. Private=false: never copy them next to the plugin. -->
+    <Reference Include="MediaBrowser.Common">
+      <HintPath>$(EmbySystemDir)\MediaBrowser.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MediaBrowser.Controller">
+      <HintPath>$(EmbySystemDir)\MediaBrowser.Controller.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MediaBrowser.Model">
+      <HintPath>$(EmbySystemDir)\MediaBrowser.Model.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Required by MediaBrowser.Model.Services.IResponse.OutputWriter (PipeWriter). -->
+    <Reference Include="System.IO.Pipelines">
+      <HintPath>$(EmbySystemDir)\System.IO.Pipelines.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
