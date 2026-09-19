@@ -22,7 +22,14 @@ namespace Emby.Plugin.AppleMusic.Api;
 /// Saves the plugin configuration from the dashboard form. Every field is written
 /// because the form always posts all of them.
 /// </summary>
+/// <remarks>
+/// Emby's auth token lives in the web client's memory and is sent as a request header.
+/// A native form post cannot attach headers, so these dashboard endpoints must be
+/// marked unauthenticated; <see cref="RestApi.IsCrossSiteRequest"/> rejects foreign
+/// origins instead.
+/// </remarks>
 [Route("/AppleMusic/SaveConfig", "POST")]
+[Unauthenticated]
 public class SaveConfigRequest : IReturnVoid
 {
     /// <summary>Artist / biography storefront.</summary>
@@ -45,6 +52,7 @@ public class SaveConfigRequest : IReturnVoid
 /// Runs one of the manual operations from the dashboard page.
 /// </summary>
 [Route("/AppleMusic/Action", "GET")]
+[Unauthenticated]
 public class ActionRequest : IReturnVoid
 {
     /// <summary>One of refresh-artists, refresh-albums, test-netease, test-apple.</summary>
@@ -58,6 +66,7 @@ public class ActionRequest : IReturnVoid
 /// Shows the current configuration and library statistics.
 /// </summary>
 [Route("/AppleMusic/Status", "GET")]
+[Unauthenticated]
 public class StatusRequest : IReturnVoid
 {
 }
@@ -98,8 +107,14 @@ public class RestApi : IService, IRequiresRequest
     /// Saves the configuration and returns to the configuration page.
     /// </summary>
     /// <param name="request">Posted form values.</param>
-    public void Post(SaveConfigRequest request)
+    public async Task Post(SaveConfigRequest request)
     {
+        if (IsCrossSiteRequest())
+        {
+            await WriteHtmlAsync("拒绝访问", "检测到跨站请求，已拒绝。请从 Emby 控制台的配置页发起操作。").ConfigureAwait(false);
+            return;
+        }
+
         var config = Plugin.Instance!.Configuration!;
         config.Storefront = NormalizeStorefront(request.Storefront, "cn");
         config.AlbumStorefront = NormalizeStorefront(request.AlbumStorefront, string.Empty);
@@ -118,6 +133,12 @@ public class RestApi : IService, IRequiresRequest
     /// <returns>Task.</returns>
     public async Task Get(ActionRequest request)
     {
+        if (IsCrossSiteRequest())
+        {
+            await WriteHtmlAsync("拒绝访问", "检测到跨站请求，已拒绝。请从 Emby 控制台的配置页发起操作。").ConfigureAwait(false);
+            return;
+        }
+
         switch (request.Op)
         {
             case "refresh-artists":
@@ -189,6 +210,12 @@ public class RestApi : IService, IRequiresRequest
     /// <returns>Task.</returns>
     public async Task Get(StatusRequest request)
     {
+        if (IsCrossSiteRequest())
+        {
+            await WriteHtmlAsync("拒绝访问", "检测到跨站请求，已拒绝。请从 Emby 控制台的配置页发起操作。").ConfigureAwait(false);
+            return;
+        }
+
         var config = Plugin.Instance!.Configuration!;
         var body =
             $"Storefront（艺人 / 简介）：<b>{HtmlEncode(PluginUtils.Storefront)}</b><br/>" +
@@ -206,6 +233,25 @@ public class RestApi : IService, IRequiresRequest
     {
         var trimmed = (value ?? string.Empty).Trim().ToLowerInvariant();
         return trimmed.Length == 0 ? fallback : trimmed;
+    }
+
+    /// <summary>
+    /// These endpoints accept unauthenticated native form posts and link navigations
+    /// (Emby's auth token cannot be attached to either), so the one real protection is
+    /// rejecting requests whose Referer points at a different host - the signature of a
+    /// cross-site forgery. Typing the URL directly (no Referer at all) still works, and
+    /// api_key keeps working for scripted use.
+    /// </summary>
+    private bool IsCrossSiteRequest()
+    {
+        var referer = Request.Headers["Referer"];
+        if (string.IsNullOrEmpty(referer))
+        {
+            return false;
+        }
+
+        var host = Request.Headers["Host"];
+        return !string.IsNullOrEmpty(host) && !referer.Contains(host, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsTrue(string value)
