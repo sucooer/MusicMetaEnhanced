@@ -34,7 +34,8 @@ jobs:
 
       # The plugin compiles against Emby's own assemblies (MediaBrowser.*), which
       # are not on NuGet at a matching version, so pull them from the official
-      # portable server build. Only the 4 DLLs we reference are kept.
+      # portable server build. Only the 3 DLLs Emby ships are kept here;
+      # System.IO.Pipelines comes from NuGet (it is absent from this package).
       - name: Cache Emby reference assemblies
         id: emby_cache
         uses: actions/cache@v4
@@ -51,11 +52,12 @@ jobs:
           curl -fsSL --retry 3 --retry-delay 5 -o emby.zip "$url"
 
           mkdir -p emby-tmp emby-system
+          # Only these three come from Emby's own assemblies.
+          # System.IO.Pipelines is NOT in this package - it comes from NuGet.
           unzip -q -o emby.zip -d emby-tmp \
             "*MediaBrowser.Common.dll" \
             "*MediaBrowser.Controller.dll" \
-            "*MediaBrowser.Model.dll" \
-            "*System.IO.Pipelines.dll"
+            "*MediaBrowser.Model.dll"
           find emby-tmp -name '*.dll' -exec cp -f {} emby-system/ \;
 
           rm -f emby.zip
@@ -63,8 +65,8 @@ jobs:
 
           count=$(ls -1 emby-system/*.dll 2>/dev/null | wc -l)
           echo "Extracted $count reference assemblies"
-          if [ "$count" -lt 4 ]; then
-            echo "::error::Expected 4 Emby reference assemblies, found $count"
+          if [ "$count" -lt 3 ]; then
+            echo "::error::Expected 3 Emby reference assemblies, found $count"
             exit 1
           fi
           ls -l emby-system

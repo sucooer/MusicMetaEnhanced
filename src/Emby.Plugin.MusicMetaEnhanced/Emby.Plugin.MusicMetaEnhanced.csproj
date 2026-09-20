@@ -21,6 +21,9 @@
     <!-- Derives the version from the closest git tag. Needs git + full history
          (CI must check out with fetch-depth: 0). -->
     <PackageReference Include="MinVer" Version="8.0.0" PrivateAssets="All" />
+    <!-- ExcludeAssets=runtime: reference it to compile, but never copy it next to
+         the plugin (Emby loads its own copy). -->
+    <PackageReference Include="System.IO.Pipelines" Version="8.0.0" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,11 +47,9 @@
       <HintPath>$(EmbySystemDir)\MediaBrowser.Model.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- Required by MediaBrowser.Model.Services.IResponse.OutputWriter (PipeWriter). -->
-    <Reference Include="System.IO.Pipelines">
-      <HintPath>$(EmbySystemDir)\System.IO.Pipelines.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <!-- Required by MediaBrowser.Model.Services.IResponse.OutputWriter (PipeWriter).
+         Not shipped by the portable Emby package, so it comes from NuGet —
+         compile-time only, Emby provides it at runtime. -->
   </ItemGroup>
 
   <!-- MinVer intentionally zeroes AssemblyVersion to "{major}.0.0.0" so that
