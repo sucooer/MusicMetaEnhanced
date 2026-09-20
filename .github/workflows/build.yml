@@ -18,6 +18,8 @@ jobs:
   build:
     name: Build plugin
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
 
     steps:
       - name: Checkout
@@ -76,6 +78,16 @@ jobs:
           EMBY_SYSTEM_DIR: ${{ github.workspace }}/emby-system
         run: dotnet build "$PROJECT" -c Release --nologo
 
+      # MinVer wrote the computed version into the generated AssemblyInfo; read it
+      # back so the release jobs can use it (e.g. "1.5.11-alpha.0.3+abcdef0").
+      - name: Read computed version
+        id: ver
+        run: |
+          ver=$(grep -oP 'AssemblyInformationalVersionAttribute\("\K[^"]+' \
+            src/Emby.Plugin.MusicMetaEnhanced/obj/Release/net8.0/Emby.Plugin.MusicMetaEnhanced.AssemblyInfo.cs)
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Computed version: $ver"
+
       - name: Upload plugin DLL
         uses: actions/upload-artifact@v4
         with:
@@ -122,3 +134,50 @@ jobs:
           esac
 
           gh release create "${args[@]}" "$dll"
+
+  # Every push to master (without a tag) republishes a rolling "beta" prerelease
+  # so users can always grab the newest dev build from a single, stable place.
+  # The "beta" tag name is deliberately not a version: MinVer ignores it, so it
+  # never influences the computed plugin version.
+  beta:
+    name: Publish beta release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Rapid successive pushes: only the newest beta needs to land.
+    concurrency:
+      group: beta-release
+      cancel-in-progress: true
+
+    steps:
+      - name: Download plugin DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: Emby.Plugin.MusicMetaEnhanced
+          path: dist
+
+      - name: Republish rolling beta release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          dll=$(find dist -name 'Emby.Plugin.MusicMetaEnhanced.dll' | head -1)
+          if [ -z "$dll" ]; then
+            echo "::error::plugin DLL not found in dist/"
+            exit 1
+          fi
+          echo "Publishing beta ${VERSION} ($dll)"
+
+          # Move the "beta" tag to this commit: delete the old release + tag,
+          # then recreate the release at the current SHA.
+          gh release delete beta --yes --cleanup-tag || true
+
+          gh release create beta \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Beta ${VERSION}" \
+            --notes "Automated build of master ($GITHUB_SHA). Not a stable release - for the latest stable version see the tagged releases." \
+            "$dll"
