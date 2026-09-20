@@ -1,0 +1,78 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Emby server version to compile against. Keep in sync with the server you
+  # deploy to — bump this when you upgrade Emby.
+  EMBY_VERSION: "4.9.5.0"
+  PROJECT: "src/Emby.Plugin.MusicMetaEnhanced/Emby.Plugin.MusicMetaEnhanced.csproj"
+
+jobs:
+  build:
+    name: Build plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # The plugin compiles against Emby's own assemblies (MediaBrowser.*), which
+      # are not on NuGet at a matching version, so pull them from the official
+      # portable server build. Only the 4 DLLs we reference are kept.
+      - name: Cache Emby reference assemblies
+        id: emby_cache
+        uses: actions/cache@v4
+        with:
+          path: emby-system
+          key: emby-system-${{ env.EMBY_VERSION }}
+
+      - name: Download Emby reference assemblies
+        if: steps.emby_cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          url="https://github.com/MediaBrowser/Emby.Releases/releases/download/${EMBY_VERSION}/embyserver-netcore_${EMBY_VERSION}.zip"
+          echo "Downloading $url"
+          curl -fsSL --retry 3 --retry-delay 5 -o emby.zip "$url"
+
+          mkdir -p emby-tmp emby-system
+          unzip -q -o emby.zip -d emby-tmp \
+            "*MediaBrowser.Common.dll" \
+            "*MediaBrowser.Controller.dll" \
+            "*MediaBrowser.Model.dll" \
+            "*System.IO.Pipelines.dll"
+          find emby-tmp -name '*.dll' -exec cp -f {} emby-system/ \;
+
+          rm -f emby.zip
+          rm -rf emby-tmp
+
+          count=$(ls -1 emby-system/*.dll 2>/dev/null | wc -l)
+          echo "Extracted $count reference assemblies"
+          if [ "$count" -lt 4 ]; then
+            echo "::error::Expected 4 Emby reference assemblies, found $count"
+            exit 1
+          fi
+          ls -l emby-system
+
+      - name: Build
+        env:
+          EMBY_SYSTEM_DIR: ${{ github.workspace }}/emby-system
+        run: dotnet build "$PROJECT" -c Release --nologo
+
+      - name: Upload plugin DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: Emby.Plugin.MusicMetaEnhanced
+          path: src/Emby.Plugin.MusicMetaEnhanced/bin/Release/net8.0/Emby.Plugin.MusicMetaEnhanced.dll
+          if-no-files-found: error

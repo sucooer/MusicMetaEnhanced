@@ -18,9 +18,9 @@
 
   <ItemGroup>
     <!-- Dashboard configuration page, served from inside the DLL. -->
-    <EmbeddedResource Include="Configuration\configPage.html" />
+    <EmbeddedResource Include="Configuration/configPage.html" />
     <!-- Plugin thumb image, shown on the dashboard Plugins page (IHasThumbImage). -->
-    <EmbeddedResource Include="Configuration\plugin.jpg" />
+    <EmbeddedResource Include="Configuration/plugin.jpg" />
   </ItemGroup>
 
   <ItemGroup>
