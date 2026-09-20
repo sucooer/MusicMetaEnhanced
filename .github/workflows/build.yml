@@ -80,3 +80,43 @@ jobs:
           name: Emby.Plugin.MusicMetaEnhanced
           path: src/Emby.Plugin.MusicMetaEnhanced/bin/Release/net8.0/Emby.Plugin.MusicMetaEnhanced.dll
           if-no-files-found: error
+
+  # Publishing is just: git tag -a v1.5.11 -m "..." && git push --tags
+  # The tag both fixes the version (MinVer) and triggers this job.
+  release:
+    name: Create release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download plugin DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: Emby.Plugin.MusicMetaEnhanced
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Look the DLL up by name so this does not depend on how the artifact
+          # action lays out its download directory.
+          dll=$(find dist -name 'Emby.Plugin.MusicMetaEnhanced.dll' | head -1)
+          if [ -z "$dll" ]; then
+            echo "::error::plugin DLL not found in dist/"
+            exit 1
+          fi
+          echo "Releasing $TAG ($dll)"
+
+          args=("$TAG" --title "$TAG" --generate-notes)
+          # Tags like v1.6.0-beta.1 are pre-releases; plain v1.6.0 is not.
+          case "$TAG" in
+            *-*) args+=(--prerelease) ;;
+          esac
+
+          gh release create "${args[@]}" "$dll"
