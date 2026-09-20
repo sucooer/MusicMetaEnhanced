@@ -148,7 +148,9 @@ jobs:
   beta:
     name: Publish beta release
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    # Master pushes publish automatically; workflow_dispatch allows refreshing the
+    # beta release by hand without making a commit.
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
