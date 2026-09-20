@@ -4,8 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Emby.Plugin.MusicMetaEnhanced</RootNamespace>
     <AssemblyName>Emby.Plugin.MusicMetaEnhanced</AssemblyName>
-    <AssemblyVersion>1.5.10.0</AssemblyVersion>
-    <FileVersion>1.5.10.0</FileVersion>
+    <!-- Version is derived from git tags by MinVer (see below):
+         tag v1.5.10 -> 1.5.10.0. No version is hardcoded here. -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -15,6 +16,12 @@
          environment variable) at your Emby server's "system" directory. -->
     <EmbySystemDir Condition="'$(EmbySystemDir)' == ''">$(EMBY_SYSTEM_DIR)</EmbySystemDir>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Derives the version from the closest git tag. Needs git + full history
+         (CI must check out with fetch-depth: 0). -->
+    <PackageReference Include="MinVer" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Dashboard configuration page, served from inside the DLL. -->
@@ -43,5 +50,18 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+
+  <!-- MinVer intentionally zeroes AssemblyVersion to "{major}.0.0.0" so that
+       assembly binding stays stable. Emby, however, shows the assembly version
+       on the Plugins page, which would make every release read "1.0.0.0".
+       Restore the full version so the dashboard reports e.g. 1.5.10.0. -->
+  <Target Name="MinVerFullAssemblyVersion"
+          AfterTargets="MinVer"
+          BeforeTargets="GetAssemblyVersion"
+          Condition="'$(MinVerMajor)' != ''">
+    <PropertyGroup>
+      <AssemblyVersion>$(MinVerMajor).$(MinVerMinor).$(MinVerPatch).0</AssemblyVersion>
+    </PropertyGroup>
+  </Target>
 
 </Project>
