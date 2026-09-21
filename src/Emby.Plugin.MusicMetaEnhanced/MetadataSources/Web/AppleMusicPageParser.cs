@@ -123,6 +123,22 @@ public static class AppleMusicPageParser
     }
 
     /// <summary>
+    /// Gets an integer property, returning null when missing or not a number.
+    /// </summary>
+    /// <param name="element">JSON element.</param>
+    /// <param name="name">Property name.</param>
+    /// <returns>Property value.</returns>
+    public static int? GetInt(JsonElement element, string name)
+    {
+        if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(name, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : null;
+    }
+
+    /// <summary>
     /// Gets a nested string property using a path of property names.
     /// </summary>
     /// <param name="element">JSON element.</param>

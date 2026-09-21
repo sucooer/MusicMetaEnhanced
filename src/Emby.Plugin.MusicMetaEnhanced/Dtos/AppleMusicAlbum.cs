@@ -21,6 +21,7 @@ public class AppleMusicAlbum : IAppleMusicItem
         Name = string.Empty;
         Url = string.Empty;
         Artists = new List<AppleMusicArtist>();
+        Tracks = new List<AppleMusicTrack>();
     }
 
     /// <inheritdoc />
@@ -48,6 +49,13 @@ public class AppleMusicAlbum : IAppleMusicItem
     /// Gets or sets the release date.
     /// </summary>
     public DateTime? ReleaseDate { get; set; }
+
+    /// <summary>
+    /// Gets or sets the track list. Only the album detail page carries it; search
+    /// results never do, so an album resolved from a search has to be fetched by id
+    /// before its tracks are known.
+    /// </summary>
+    public IList<AppleMusicTrack> Tracks { get; set; }
 
     /// <inheritdoc />
     public RemoteSearchResult ToRemoteSearchResult()

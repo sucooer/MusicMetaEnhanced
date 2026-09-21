@@ -31,6 +31,23 @@ public sealed record ItunesAlbumData(
     string? Description);
 
 /// <summary>
+/// A track as returned by the iTunes Search API.
+/// </summary>
+/// <param name="Id">Track Adam id.</param>
+/// <param name="Name">Track name in the storefront's own script.</param>
+/// <param name="TrackNumber">Position on the disc.</param>
+/// <param name="DiscNumber">Disc number.</param>
+/// <param name="DurationMs">Duration in milliseconds.</param>
+/// <param name="ArtistName">Track artist name.</param>
+public sealed record ItunesTrackData(
+    string Id,
+    string Name,
+    int? TrackNumber,
+    int? DiscNumber,
+    int? DurationMs,
+    string? ArtistName);
+
+/// <summary>
 /// Reads album metadata from the iTunes Search API
 /// (https://itunes.apple.com/lookup, https://itunes.apple.com/search).
 /// The country parameter selects the storefront regardless of where the server runs,
@@ -69,6 +86,36 @@ public class ItunesAlbumSource
         var url = string.Format(LookupUrl, Uri.EscapeDataString(albumId), storefront);
         var collections = await GetCollectionsAsync(url, cancellationToken).ConfigureAwait(false);
         return collections.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Reads the track list of an album.
+    /// The lookup URL already asks for <c>entity=song</c>, so the response contains the
+    /// collection followed by one entry per track. Only some storefronts actually ship
+    /// them - cn, for example, lists the album but none of its songs.
+    /// </summary>
+    /// <param name="albumId">Album Adam id.</param>
+    /// <param name="storefront">Storefront code, e.g. "jp".</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Track list, possibly empty.</returns>
+    public async Task<IReadOnlyList<ItunesTrackData>> GetTracksAsync(string albumId, string storefront, CancellationToken cancellationToken)
+    {
+        var url = string.Format(LookupUrl, Uri.EscapeDataString(albumId), storefront);
+        return await GetTracksFromUrlAsync(url, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Looks a single track up by its Adam id.
+    /// </summary>
+    /// <param name="trackId">Track Adam id.</param>
+    /// <param name="storefront">Storefront code, e.g. "jp".</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Track data, or null when the id is unknown in that storefront.</returns>
+    public async Task<ItunesTrackData?> LookupTrackAsync(string trackId, string storefront, CancellationToken cancellationToken)
+    {
+        var url = string.Format(LookupUrl, Uri.EscapeDataString(trackId), storefront);
+        var tracks = await GetTracksFromUrlAsync(url, cancellationToken).ConfigureAwait(false);
+        return tracks.FirstOrDefault();
     }
 
     /// <summary>
@@ -118,6 +165,84 @@ public class ItunesAlbumSource
             _logger.ErrorException("iTunes: request to {0} failed", exception, url);
             return new List<ItunesAlbumData>();
         }
+    }
+
+    /// <summary>
+    /// Fetches an iTunes API response and materializes its track entries.
+    /// </summary>
+    /// <param name="url">Request URL.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Track list, possibly empty.</returns>
+    private async Task<List<ItunesTrackData>> GetTracksFromUrlAsync(string url, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var json = await _httpClient.GetStringAsync(url, new Dictionary<string, string>(), cancellationToken).ConfigureAwait(false);
+            using var document = JsonDocument.Parse(json);
+
+            if (!document.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+            {
+                return new List<ItunesTrackData>();
+            }
+
+            return results.EnumerateArray()
+                .Where(element => WrapperType(element) == "track")
+                .Select(ToTrackData)
+                .Where(data => data is not null)
+                .Select(data => data!)
+                .ToList();
+        }
+        catch (Exception exception)
+        {
+            // Same rule as the album path: a failing source must never break a refresh.
+            _logger.ErrorException("iTunes: request to {0} failed", exception, url);
+            return new List<ItunesTrackData>();
+        }
+    }
+
+    private static ItunesTrackData? ToTrackData(JsonElement element)
+    {
+        int? Number(string name)
+        {
+            return element.TryGetProperty(name, out var value)
+                   && value.ValueKind == JsonValueKind.Number
+                   && value.TryGetInt32(out var number)
+                ? number
+                : null;
+        }
+
+        // Adam ids exceed int32 (6 799 021 921 is a perfectly normal track id), so the
+        // id has to be read as int64 - GetInt32 silently throws on those.
+        long? Long(string name)
+        {
+            return element.TryGetProperty(name, out var value)
+                   && value.ValueKind == JsonValueKind.Number
+                   && value.TryGetInt64(out var number)
+                ? number
+                : null;
+        }
+
+        string? Text(string name)
+        {
+            return element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+
+        var id = Long("trackId");
+        var name = Text("trackName");
+        if (id is null || string.IsNullOrEmpty(name))
+        {
+            return null;
+        }
+
+        return new ItunesTrackData(
+            id.Value.ToString(),
+            name!,
+            Number("trackNumber"),
+            Number("discNumber"),
+            Number("trackTimeMillis"),
+            Text("artistName"));
     }
 
     private static string? WrapperType(JsonElement element)

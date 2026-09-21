@@ -140,7 +140,9 @@ public class WebMetadataSource : IMetadataSource
             return null;
         }
 
-        return MapAlbumDetail(item.Value, albumId, albumUrl);
+        var album = MapAlbumDetail(item.Value, albumId, albumUrl);
+        album.Tracks = ParseTracks(document);
+        return album;
     }
 
     /// <inheritdoc />
@@ -258,6 +260,49 @@ public class WebMetadataSource : IMetadataSource
             ImageUrl = ResolveArtwork(item, "artwork") ?? ResolveArtwork(item, "tallArtwork"),
             Artists = ParseArtistLinks(item),
         };
+    }
+
+    /// <summary>
+    /// Reads the album track list out of the page data.
+    /// The album page also carries recommendation shelves that use the very same item
+    /// kind ("trackLockup"), so the section id is what tells the real list apart: only
+    /// the album's own tracks live in a section whose id starts with "track-list".
+    /// </summary>
+    /// <param name="document">Parsed page data.</param>
+    /// <returns>Track list, empty when the page has none.</returns>
+    private static List<AppleMusicTrack> ParseTracks(JsonDocument document)
+    {
+        var tracks = new List<AppleMusicTrack>();
+
+        foreach (var section in AppleMusicPageParser.GetSections(document))
+        {
+            var sectionId = AppleMusicPageParser.GetString(section, "id");
+            if (sectionId is null || !sectionId.StartsWith("track-list", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var item in AppleMusicPageParser.GetItems(section))
+            {
+                var name = AppleMusicPageParser.GetString(item, "title");
+                if (string.IsNullOrEmpty(name))
+                {
+                    continue;
+                }
+
+                tracks.Add(new AppleMusicTrack
+                {
+                    Id = AppleMusicPageParser.GetIdPath(item, "contentDescriptor", "identifiers", "storeAdamID") ?? string.Empty,
+                    Name = name!,
+                    TrackNumber = AppleMusicPageParser.GetInt(item, "trackNumber"),
+                    DiscNumber = AppleMusicPageParser.GetInt(item, "discNumber"),
+                    DurationMs = AppleMusicPageParser.GetInt(item, "duration"),
+                    ArtistName = AppleMusicPageParser.GetString(item, "artistName"),
+                });
+            }
+        }
+
+        return tracks;
     }
 
     private AppleMusicArtist MapArtistDetail(JsonElement item, string artistId, string artistUrl)

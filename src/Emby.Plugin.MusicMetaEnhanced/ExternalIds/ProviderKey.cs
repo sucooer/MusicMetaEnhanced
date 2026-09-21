@@ -19,4 +19,10 @@ public static class ProviderKey
     /// Apple Music artist provider ID.
     /// </summary>
     public const string AppleMusicArtist = "AppleMusicArtist";
+
+    /// <summary>
+    /// Apple Music song provider ID. Songs live inside an album, so this is the
+    /// track Adam id, not the album one.
+    /// </summary>
+    public const string AppleMusicSong = "AppleMusicSong";
 }
