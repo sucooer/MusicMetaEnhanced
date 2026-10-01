@@ -12,7 +12,12 @@ env:
   # Emby server version to compile against. Keep in sync with the server you
   # deploy to — bump this when you upgrade Emby.
   EMBY_VERSION: "4.9.5.0"
+  # Older Emby servers worth reporting on: arm64 images lag behind the x64 ones,
+  # so many arm64 boxes still run an older build. Informational only — see the
+  # verification job below.
+  EMBY_COMPAT_VERSIONS: "4.9.3.0"
   PROJECT: "src/Emby.Plugin.MusicMetaEnhanced/Emby.Plugin.MusicMetaEnhanced.csproj"
+  DLL: "Emby.Plugin.MusicMetaEnhanced.dll"
 
 jobs:
   build:
@@ -95,11 +100,101 @@ jobs:
           path: src/Emby.Plugin.MusicMetaEnhanced/bin/Release/net8.0/Emby.Plugin.MusicMetaEnhanced.dll
           if-no-files-found: error
 
+  # The plugin is a pure managed, IL-only AnyCPU assembly: there is no arm64
+  # codegen to do, and the same DLL loads on x64 and arm64. So "arm64 support"
+  # is not a different build - it is a claim that has to be *verified*. That is
+  # what this job does: it runs the real arm64 Emby container on a native arm64
+  # runner, drops the freshly built DLL into the server's plugin folder, starts
+  # the server, and asserts that the server lists the plugin.
+  #
+  # This is also the failure users hit most often - Emby scans the plugin folder
+  # exactly once, at startup, and silently ignores anything it cannot load. A
+  # build that compiles is not the same as a plugin the server accepts.
+  verify-arm64:
+    name: Verify plugin loads on arm64 Emby
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Guard against the runner silently falling back to another architecture,
+      # which would make the load test below meaningless.
+      - name: Confirm the runner really is arm64
+        run: |
+          set -euo pipefail
+          arch=$(uname -m)
+          echo "Runner architecture: $arch"
+          if [ "$arch" != "aarch64" ]; then
+            echo "::error::expected an aarch64 runner, got $arch"
+            exit 1
+          fi
+          docker version
+
+      - name: Download plugin DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: Emby.Plugin.MusicMetaEnhanced
+          path: dist
+
+      - name: Verify the plugin loads (hard gate)
+        run: |
+          set -euo pipefail
+          dll=$(find dist -name "$DLL" | head -1)
+          if [ -z "$dll" ]; then
+            echo "::error::$DLL not found in dist/"
+            exit 1
+          fi
+          bash tools/verify-plugin-load.sh "$dll" "$EMBY_VERSION"
+
+      # Reported, never gated: if the plugin fails on an older server we want to
+      # see it, but that must not block publishing a build for the current one.
+      - name: Report on older arm64 servers (informational)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          dll=$(find dist -name "$DLL" | head -1)
+          for v in $EMBY_COMPAT_VERSIONS; do
+            echo "::group::Emby $v"
+            if bash tools/verify-plugin-load.sh "$dll" "$v"; then
+              echo "Emby $v also loads the plugin."
+            else
+              echo "::warning::Emby $v did not load the plugin - see the log above."
+            fi
+            echo "::endgroup::"
+          done
+
+      # Second artifact for people who want to pick "the arm64 one" explicitly.
+      # It is a byte-identical copy on purpose (see the job comment): a separate
+      # name, not a separate build. The sha256 equality check keeps that honest.
+      - name: Produce the -arm64 named artifact
+        run: |
+          set -euo pipefail
+          dll=$(find dist -name "$DLL" | head -1)
+          cp "$dll" "dist/Emby.Plugin.MusicMetaEnhanced-arm64.dll"
+          sha256sum dist/*.dll
+          a=$(sha256sum "$dll" | cut -d' ' -f1)
+          b=$(sha256sum dist/Emby.Plugin.MusicMetaEnhanced-arm64.dll | cut -d' ' -f1)
+          if [ "$a" != "$b" ]; then
+            echo "::error::the -arm64 copy is not identical to the verified DLL"
+            exit 1
+          fi
+          echo "Identical bytes ($a): one AnyCPU assembly, two file names."
+
+      - name: Upload -arm64 named DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: Emby.Plugin.MusicMetaEnhanced-arm64
+          path: dist/Emby.Plugin.MusicMetaEnhanced-arm64.dll
+          if-no-files-found: error
+
   # Publishing is just: git tag -a v1.5.11 -m "..." && git push --tags
   # The tag both fixes the version (MinVer) and triggers this job.
   release:
     name: Create release
-    needs: build
+    needs: [build, verify-arm64]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -117,6 +212,12 @@ jobs:
           name: Emby.Plugin.MusicMetaEnhanced
           path: dist
 
+      - name: Download -arm64 named DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: Emby.Plugin.MusicMetaEnhanced-arm64
+          path: dist/arm64
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -124,14 +225,15 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # Look the DLL up by name so this does not depend on how the artifact
+          # Look the DLLs up by name so this does not depend on how the artifact
           # action lays out its download directory.
           dll=$(find dist -name 'Emby.Plugin.MusicMetaEnhanced.dll' | head -1)
-          if [ -z "$dll" ]; then
-            echo "::error::plugin DLL not found in dist/"
+          dll_arm64=$(find dist/arm64 -name 'Emby.Plugin.MusicMetaEnhanced-arm64.dll' | head -1)
+          if [ -z "$dll" ] || [ -z "$dll_arm64" ]; then
+            echo "::error::plugin DLLs not found in dist/"
             exit 1
           fi
-          echo "Releasing $TAG ($dll)"
+          echo "Releasing $TAG ($dll, $dll_arm64)"
 
           args=("$TAG" --title "$TAG" --generate-notes)
           # Tags like v1.6.0-beta.1 are pre-releases; plain v1.6.0 is not.
@@ -139,7 +241,7 @@ jobs:
             *-*) args+=(--prerelease) ;;
           esac
 
-          gh release create "${args[@]}" "$dll"
+          gh release create "${args[@]}" "$dll" "$dll_arm64"
 
   # Every push to master (without a tag) republishes a rolling "beta" prerelease
   # so users can always grab the newest dev build from a single, stable place.
@@ -147,7 +249,7 @@ jobs:
   # never influences the computed plugin version.
   beta:
     name: Publish beta release
-    needs: build
+    needs: [build, verify-arm64]
     # Master pushes publish automatically; workflow_dispatch allows refreshing the
     # beta release by hand without making a commit.
     if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch'
@@ -171,6 +273,12 @@ jobs:
           name: Emby.Plugin.MusicMetaEnhanced
           path: dist
 
+      - name: Download -arm64 named DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: Emby.Plugin.MusicMetaEnhanced-arm64
+          path: dist/arm64
+
       - name: Republish rolling beta release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -179,11 +287,12 @@ jobs:
         run: |
           set -euo pipefail
           dll=$(find dist -name 'Emby.Plugin.MusicMetaEnhanced.dll' | head -1)
-          if [ -z "$dll" ]; then
-            echo "::error::plugin DLL not found in dist/"
+          dll_arm64=$(find dist/arm64 -name 'Emby.Plugin.MusicMetaEnhanced-arm64.dll' | head -1)
+          if [ -z "$dll" ] || [ -z "$dll_arm64" ]; then
+            echo "::error::plugin DLLs not found in dist/"
             exit 1
           fi
-          echo "Publishing beta ${VERSION} ($dll)"
+          echo "Publishing beta ${VERSION} ($dll, $dll_arm64)"
 
           # Move the "beta" tag to this commit: delete the old release + tag,
           # then recreate the release at the current SHA.
@@ -194,4 +303,4 @@ jobs:
             --prerelease \
             --title "Beta ${VERSION}" \
             --notes "Automated build of master ($GITHUB_SHA). Not a stable release - for the latest stable version see the tagged releases." \
-            "$dll"
+            "$dll" "$dll_arm64"
