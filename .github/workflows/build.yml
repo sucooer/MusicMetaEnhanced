@@ -12,8 +12,8 @@ env:
   # Emby server version to compile against. Keep in sync with the server you
   # deploy to — bump this when you upgrade Emby.
   EMBY_VERSION: "4.9.5.0"
-  # Older Emby servers worth reporting on: arm64 images lag behind the x64 ones,
-  # so many arm64 boxes still run an older build. Informational only — see the
+  # Older Emby servers worth reporting on: arm64 builds lag behind the x64 ones,
+  # so arm64 boxes often run an older server. Informational only - see the
   # verification job below.
   EMBY_COMPAT_VERSIONS: "4.9.3.0"
   PROJECT: "src/Emby.Plugin.MusicMetaEnhanced/Emby.Plugin.MusicMetaEnhanced.csproj"
@@ -103,7 +103,7 @@ jobs:
   # The plugin is a pure managed, IL-only AnyCPU assembly: there is no arm64
   # codegen to do, and the same DLL loads on x64 and arm64. So "arm64 support"
   # is not a different build - it is a claim that has to be *verified*. That is
-  # what this job does: it runs the real arm64 Emby container on a native arm64
+  # what this job does: it runs a real arm64 Emby server natively on an arm64
   # runner, drops the freshly built DLL into the server's plugin folder, starts
   # the server, and asserts that the server lists the plugin.
   #
@@ -114,7 +114,7 @@ jobs:
     name: Verify plugin loads on arm64 Emby
     needs: build
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -131,7 +131,18 @@ jobs:
             echo "::error::expected an aarch64 runner, got $arch"
             exit 1
           fi
-          docker version
+
+      # The verifier starts the server package with `dotnet`, so it needs a
+      # runtime here as well as in the build job.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # The verifier only ever runs here, so catch a typo in it up front rather
+      # than after downloading a server package.
+      - name: Syntax-check the verifier
+        run: bash -n tools/verify-plugin-load.sh
 
       - name: Download plugin DLL
         uses: actions/download-artifact@v4
