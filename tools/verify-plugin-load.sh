@@ -16,7 +16,7 @@
 # temporary directory without touching the host.
 #
 # Requires: Linux on the target architecture (aarch64 for arm64), curl, dpkg-deb,
-#           and a .NET 8 runtime on PATH.
+#           and a .NET 8 runtime reachable through `dotnet`.
 #
 # Usage:
 #   tools/verify-plugin-load.sh <plugin.dll> <emby-version> [timeout-seconds]
@@ -38,6 +38,10 @@ timeout_s=${3:-${EMBY_TIMEOUT_S:-420}}
 plugin_name=${EMBY_PLUGIN_NAME:-Music Meta Enhanced}
 arch=${EMBY_ARCH:-arm64}
 dotnet_cmd=${DOTNET:-dotnet}
+# How long a launch must survive before it counts as "the server is up". A
+# rejected launch (missing runtime, wrong native library) dies in well under a
+# second, so this only has to outlast immediate failure, not full startup.
+probe_s=${EMBY_PROBE_S:-12}
 
 [ -f "$dll" ] || { echo "::error::plugin DLL not found: $dll"; exit 2; }
 dll=$(cd "$(dirname "$dll")" && pwd)/$(basename "$dll")
@@ -61,6 +65,8 @@ trap cleanup EXIT
 echo "Verifying that Emby $emby_version loads $dll"
 echo "  host arch: $(uname -m)"
 echo "  dotnet:    $("$dotnet_cmd" --version 2>/dev/null || echo '(not found)')"
+"$dotnet_cmd" --list-runtimes 2>/dev/null | grep -i 'Microsoft.NETCore.App 8' | sed 's/^/  runtime:   /' \
+  || echo "  runtime:   no Microsoft.NETCore.App 8.x found"
 
 # ---------------------------------------------------------------- download ----
 asset="emby-server-deb_${emby_version}_${arch}.deb"
@@ -84,10 +90,22 @@ system_dir="$work/root/opt/emby-server/system"
 lib_dir="$work/root/opt/emby-server/lib"
 [ -f "$system_dir/EmbyServer.dll" ] || {
   echo "::error::no EmbyServer.dll in $system_dir"
-  find "$work/root" -maxdepth 4 -name 'Emby*.dll' | head -20
+  find "$work/root" -maxdepth 4 -name 'Emby*.dll' | head -20 || true
   exit 2
 }
-echo "Extracted server: $system_dir"
+
+# The server package can be laid out in more than one way across versions (a
+# self-contained apphost, or a framework-dependent DLL plus native libraries),
+# and the wrong assumption fails in ways that look nothing like the cause. So
+# record what is actually there and let the launch attempts below pick.
+echo "----- package layout -----"
+echo "  system dir:   $system_dir"
+[ -x "$system_dir/EmbyServer" ] && echo "  apphost:      yes" || echo "  apphost:      no"
+if [ -f "$system_dir/EmbyServer.runtimeconfig.json" ]; then
+  tr -d ' \n' <"$system_dir/EmbyServer.runtimeconfig.json" | head -c 400
+  echo
+fi
+[ -d "$lib_dir" ] && { echo "  lib dir:      $(ls -1 "$lib_dir" | wc -l) files"; ls -1 "$lib_dir" | sed -n '1,15p' | sed 's/^/    /'; }
 
 # ---------------------------------------------------------------- install -----
 # The DLL has to be in place *before* the server starts: Emby has no plugin
@@ -96,14 +114,50 @@ mkdir -p "$programdata/plugins"
 cp "$dll" "$programdata/plugins/"
 chmod -R 0777 "$programdata"
 
-echo "Starting the server (programdata: $programdata)"
-(
-  cd "$system_dir"
-  LD_LIBRARY_PATH="$lib_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$dotnet_cmd" EmbyServer.dll -programdata "$programdata" >"$server_out" 2>&1 &
-  echo $! >"$work/server.pid"
-)
-server_pid=$(cat "$work/server.pid")
+# ---------------------------------------------------------------- launch ------
+# Try the ways the package can legitimately be started, in order of how little
+# they assume, and keep the first one that stays up. DOTNET_ROLL_FORWARD is
+# pinned to 8.0 so the server never lands on a newer major runtime by accident;
+# LD_LIBRARY_PATH is only ever set on the last attempt, because pointing it at
+# the package's native libraries can break the .NET host itself.
+launch() {
+  label=$1
+  shift
+  echo "Launching: $label"
+  : >"$server_out"
+  (
+    cd "$system_dir"
+    "$@" -programdata "$programdata" >"$server_out" 2>&1 &
+    echo $! >"$work/server.pid"
+  )
+  server_pid=$(cat "$work/server.pid")
+  sleep "$probe_s"
+  if kill -0 "$server_pid" 2>/dev/null; then
+    echo "  running (pid $server_pid)"
+    return 0
+  fi
+  echo "  exited within ${probe_s}s:"
+  head -12 "$server_out" | sed 's/^/    /'
+  return 1
+}
+
+if [ -x "$system_dir/EmbyServer" ] && launch "packaged apphost" "$system_dir/EmbyServer"; then
+  launched=1
+elif launch "dotnet (framework-dependent)" env DOTNET_ROLL_FORWARD=LatestPatch \
+  "$dotnet_cmd" "$system_dir/EmbyServer.dll"; then
+  launched=1
+elif [ -d "$lib_dir" ] && launch "dotnet + package native libraries" \
+  env DOTNET_ROLL_FORWARD=LatestPatch LD_LIBRARY_PATH="$lib_dir" \
+  "$dotnet_cmd" "$system_dir/EmbyServer.dll"; then
+  launched=1
+else
+  launched=0
+fi
+
+if [ "$launched" != 1 ]; then
+  echo "::error::could not start the Emby $emby_version server from the package"
+  exit 2
+fi
 
 # ---------------------------------------------------------------- wait --------
 listed=0
