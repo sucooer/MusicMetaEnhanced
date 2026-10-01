@@ -9,13 +9,21 @@ permissions:
   contents: read
 
 env:
-  # Emby server version to compile against. Keep in sync with the server you
-  # deploy to — bump this when you upgrade Emby.
-  EMBY_VERSION: "4.9.5.0"
-  # Older Emby servers worth reporting on: arm64 builds lag behind the x64 ones,
-  # so arm64 boxes often run an older server. Informational only - see the
-  # verification job below.
-  EMBY_COMPAT_VERSIONS: "4.9.3.0"
+  # Emby server version to compile against, and the version the load test must
+  # pass on. This MUST be the version you actually run (or an older one).
+  #
+  # It is not a "nice to have": the plugin's references to Emby's own assemblies
+  # are version-pinned, so a plugin compiled against 4.9.5.0 asks the server for
+  # "MediaBrowser.Common, Version=4.9.5.0". A 4.9.3.0 server only has 4.9.3.0, so
+  # the load fails and Emby silently drops the plugin from its list:
+  #   Error App: Error loading types from assembly
+  #   Could not load file or assembly 'MediaBrowser.Common, Version=4.9.5.0'
+  # Bump this only together with the server you deploy to.
+  EMBY_VERSION: "4.9.3.0"
+  # Newer Emby servers worth reporting on. Informational only (see the
+  # verification job below): it tells us whether the same DLL also loads on a
+  # newer server, which is what decides how far this build can be upgraded.
+  EMBY_COMPAT_VERSIONS: "4.9.5.0"
   PROJECT: "src/Emby.Plugin.MusicMetaEnhanced/Emby.Plugin.MusicMetaEnhanced.csproj"
   DLL: "Emby.Plugin.MusicMetaEnhanced.dll"
 
